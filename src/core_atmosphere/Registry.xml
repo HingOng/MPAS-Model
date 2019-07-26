@@ -243,6 +243,12 @@
                      units="-"
                      description="Number of halo layers for fields"
                      possible_values="Integer values, typically 2 or 3; DO NOT CHANGE"/>
+
+                <nml_option name="config_deep_atmosphere" type="logical" default_value="false" in_defaults="true"
+		     units="-"
+                     description="Deep atmosphere configuration"
+		     possible_values=".true. or .false."/>
+											       
         </nml_record>
 
         <nml_record name="damping" in_defaults="true">
@@ -1406,6 +1412,16 @@
 
                 <var name="nearestRelaxationCell" type="integer" dimensions="nCells" units="-"
                      description="For cells in the specified zone, gives the index of the nearest cell in the relaxation zone"/>
+
+                <var name="rTildeCell" type="real" dimensions="nVertLevels nCells" units="-"
+		     description="Nondimensional radius for cells"/>
+
+		<var name="rTildeEdge" type="real" dimensions="nVertLevels nEdges" units="-"
+		     description="Nondimensional radius for edges"/>
+
+                <var name="rTildeVertex" type="real" dimensions="nVertLevels nVertices" units="-"
+                     description="Nondimensional radius for vertices"/>
+
 
         </var_struct>
 

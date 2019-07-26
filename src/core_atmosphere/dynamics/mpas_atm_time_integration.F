@@ -2294,6 +2294,7 @@ module atm_time_integration
             iEdge = edgesOnCell(i,iCell)
 !DIR$ IVDEP
             do k = 2, nVertLevels
+            ! deep Eq. (25)
                flux = edgesOnCell_sign(i,iCell) * (fzm(k) * u_tend(k,iEdge) + fzp(k) * u_tend(k-1,iEdge))
                w_tend(k,iCell) = w_tend(k,iCell)   &
                         - (zb_cell(k,i,iCell) + sign(1.0_RKIND, u_tend(k,iEdge)) * zb3_cell(k,i,iCell)) * flux
@@ -2785,6 +2786,7 @@ module atm_time_integration
 !!                                                      /(theta_m(k,cell1)+theta_m(k,cell2))
 
 !!  scaled 3d divergence damping
+               ! deep Eq. (30)
                divCell1 = -(rtheta_pp(k,cell1)-rtheta_pp_old(k,cell1))
                divCell2 = -(rtheta_pp(k,cell2)-rtheta_pp_old(k,cell2))
                ru_p(k,iEdge) = ru_p(k,iEdge) + coef_divdamp*(divCell2-divCell1)*(1.0_RKIND - specZoneMaskEdge(iEdge)) &
@@ -3014,6 +3016,7 @@ module atm_time_integration
             rw(k,iCell) = rw_save(k,iCell) + rw_p(k,iCell)
 
           ! pick up part of diagnosed w from omega - divide by density later
+          ! deep Eq. (25)
             w(k,iCell) = rw(k,iCell)/(fzm(k)*zz(k,iCell)+fzp(k)*zz(k-1,iCell))
                                       
          end do
@@ -3026,8 +3029,10 @@ module atm_time_integration
                rtheta_p(k,iCell) = rtheta_p_save(k,iCell) + rtheta_pp(k,iCell) &
                                  - dt * rho_zz(k,iCell) * rt_diabatic_tend(k,iCell)
                theta_m(k,iCell) = (rtheta_p(k,iCell) + rtheta_base(k,iCell))/rho_zz(k,iCell)
+               ! deep Eq. (23)
                exner(k,iCell) = (zz(k,iCell)*(rgas/p0)*(rtheta_p(k,iCell)+rtheta_base(k,iCell)))**rcv
                ! pressure_p is perturbation pressure
+               ! deep Eq. (23)
                pressure_p(k,iCell) = zz(k,iCell) * rgas * (exner(k,iCell)*rtheta_p(k,iCell)+rtheta_base(k,iCell)  &
                                                           * (exner(k,iCell)-exner_base(k,iCell)))
             end do
@@ -3056,6 +3061,7 @@ module atm_time_integration
          do k = 1, nVertLevels
             ruAvg(k,iEdge) = ru_save(k,iEdge) + (ruAvg(k,iEdge) * invNs)
             ru(k,iEdge) = ru_save(k,iEdge) + ru_p(k,iEdge)
+            ! deep Eq. (14)
             u(k,iEdge) = 2.*ru(k,iEdge)/(rho_zz(k,cell1)+rho_zz(k,cell2))
          end do
       end do
@@ -3073,6 +3079,7 @@ module atm_time_integration
          do i=1,nEdgesOnCell(iCell)
             iEdge=edgesOnCell(i,iCell)
 
+            ! deep Eq. (25)
             flux = (cf1*ru(1,iEdge) + cf2*ru(2,iEdge) + cf3*ru(3,iEdge))
             w(1,iCell) = w(1,iCell) + edgesOnCell_sign(i,iCell) * &
                                    (zb_cell(1,i,iCell) + sign(1.0_RKIND,flux)*zb3_cell(1,i,iCell))*flux
@@ -5615,6 +5622,7 @@ module atm_time_integration
          vorticity(1:nVertLevels,iVertex) = 0.0
          do i=1,vertexDegree
             iEdge = edgesOnVertex(i,iVertex)
+            ! deep Eq. (12)
             s = edgesOnVertex_sign(i,iVertex) * dcEdge(iEdge)
 !DIR$ IVDEP
             do k=1,nVertLevels
@@ -5623,6 +5631,7 @@ module atm_time_integration
          end do
 !DIR$ IVDEP
          do k=1,nVertLevels
+            ! deep Eq. (12)
             vorticity(k,iVertex) = vorticity(k,iVertex) * invAreaTriangle(iVertex)
          end do
       end do
@@ -5635,12 +5644,14 @@ module atm_time_integration
          divergence(1:nVertLevels,iCell) = 0.0
          do i=1,nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i,iCell)
+            ! deep Eq. (11)
             s = edgesOnCell_sign(i,iCell) * dvEdge(iEdge)
 !DIR$ IVDEP
             do k=1,nVertLevels
               divergence(k,iCell) = divergence(k,iCell) + s * u(k,iEdge)
             end do
          end do
+         ! deep Eq. (11)
          r = invAreaCell(iCell)
          do k = 1,nVertLevels
             divergence(k,iCell) = divergence(k,iCell) * r
@@ -5917,6 +5928,7 @@ module atm_time_integration
       do iCell=cellStart,cellEnd
          do k=1,nVertLevels
             theta_m(k,iCell) = theta(k,iCell) * (1._RKIND + rvord * scalars(index_qv,k,iCell))
+            ! deep Eq. (13)
             rho_zz(k,iCell) = rho(k,iCell) / zz(k,iCell)
          end do
       end do
@@ -5927,6 +5939,7 @@ module atm_time_integration
          cell1 = cellsOnEdge(1,iEdge)
          cell2 = cellsOnEdge(2,iEdge)
          do k=1,nVertLevels
+            ! deep Eq. (14)
             ru(k,iEdge) = 0.5 * u(k,iEdge) * (rho_zz(k,cell1) + rho_zz(k,cell2))
          end do
       end do
@@ -5940,6 +5953,7 @@ module atm_time_integration
          rw(1,iCell) = 0.0
          rw(nVertLevels+1,iCell) = 0.0
          do k=2,nVertLevels
+         ! deep Eq. (25)
             rw(k,iCell) = w(k,iCell)     &
                           * (fzp(k) * rho_zz(k-1,iCell) + fzm(k) * rho_zz(k,iCell)) &
                           * (fzp(k) * zz(k-1,iCell) + fzm(k) * zz(k,iCell))
@@ -5980,6 +5994,7 @@ module atm_time_integration
 
       do iCell=cellStart,cellEnd
          do k=1,nVertLevels
+            ! deep Eq. (23)
             exner(k,iCell) = (zz(k,iCell) * (rgas/p0) * (rtheta_p(k,iCell) + rtheta_base(k,iCell)))**rcv
             exner_base(k,iCell) = (zz(k,iCell) * (rgas/p0) * (rtheta_base(k,iCell)))**rcv  ! WCS addition 20180403
          end do
@@ -5987,6 +6002,7 @@ module atm_time_integration
 
       do iCell=cellStart,cellEnd
          do k=1,nVertLevels
+            ! deep Eq. (23)
             pressure_p(k,iCell) = zz(k,iCell) * rgas &
                                                * (  exner(k,iCell) * rtheta_p(k,iCell) &
                                                   + rtheta_base(k,iCell) * (exner(k,iCell) - exner_base(k,iCell)) &

@@ -2559,6 +2559,7 @@ module atm_time_integration
 
 !DIR$ IVDEP
               do k=1,nVertLevels
+                 ! deep Eq. (19)
                  pgrad = ((rtheta_pp(k,cell2)-rtheta_pp(k,cell1))*invDcEdge(iEdge) )/(.5*(zz(k,cell2)+zz(k,cell1)))
                  pgrad = cqu(k,iEdge)*0.5*c2*(exner(k,cell1)+exner(k,cell2))*pgrad
                  pgrad = pgrad + 0.5*zxu(k,iEdge)*gravity*(rho_pp(k,cell1)+rho_pp(k,cell2))
@@ -2658,6 +2659,7 @@ module atm_time_integration
 
 !DIR$ IVDEP
          do k=2, nVertLevels
+            ! deep Eq. (21)
             rw_p(k,iCell) = rw_p(k,iCell) +  dts*tend_rw(k,iCell)                       &
                        - cofwz(k,iCell)*((zz(k  ,iCell)*ts(k)                           &
                                      -zz(k-1,iCell)*ts(k-1))                            &
@@ -4781,6 +4783,7 @@ module atm_time_integration
          if(rk_step == 1) then
 !DIR$ IVDEP
             do k=1,nVertLevels
+            ! deep Eq. (17)
                tend_u_euler(k,iEdge) =  - cqu(k,iEdge)*( (pp(k,cell2)-pp(k,cell1))*invDcEdge(iEdge)/(.5*(zz(k,cell2)+zz(k,cell1))) &
                                               -0.5*zxu(k,iEdge)*(dpdz(k,cell1)+dpdz(k,cell2)) )
             end do
@@ -4803,6 +4806,7 @@ module atm_time_integration
 
 !DIR$ IVDEP
          do k=1,nVertLevels
+         ! deep Eq. (17)
             tend_u(k,iEdge) = - rdzw(k)*(wduz(k+1)-wduz(k)) !  first use of tend_u
          end do
 
@@ -4824,10 +4828,12 @@ module atm_time_integration
 
             ! horizontal ke gradient and vorticity terms in the vector invariant formulation
             ! of the horizontal momentum equation
+            ! deep Eq. (17)
             tend_u(k,iEdge) = tend_u(k,iEdge) + rho_edge(k,iEdge)* (q(k) - (ke(k,cell2) - ke(k,cell1))       &
                                                                  * invDcEdge(iEdge))                            &
                                              - u(k,iEdge)*0.5*(h_divergence(k,cell1)+h_divergence(k,cell2)) 
 #ifdef CURVATURE
+            ! deep Eq. (17)
             ! curvature terms for the sphere
             tend_u(k,iEdge) = tend_u(k,iEdge) &
                              - 2.*omega*cos(angleEdge(iEdge))*cos(latEdge(iEdge))  &
@@ -5077,6 +5083,7 @@ module atm_time_integration
       do iCell = cellSolveStart, cellSolveEnd
 !DIR$ IVDEP
          do k=2,nVertLevels
+         ! deep Eq. (20)
             tend_w(k,iCell) = tend_w(k,iCell) + (rho_zz(k,iCell)*fzm(k)+rho_zz(k-1,iCell)*fzp(k))*          &
                                       ( (fzm(k)*ur_cell(k,iCell)+fzp(k)*ur_cell(k-1,iCell))**2.             &
                                        +(fzm(k)*vr_cell(k,iCell)+fzp(k)*vr_cell(k-1,iCell))**2. )/r_earth   &
@@ -5188,6 +5195,7 @@ module atm_time_integration
          if(rk_step == 1) then
 !DIR$ IVDEP
             do k=2,nVertLevels
+            ! deep Eq. (20)
               tend_w_euler(k,iCell) = tend_w_euler(k,iCell) - cqw(k,iCell)*(   &
                                            rdzu(k)*(pp(k,iCell)-pp(k-1,iCell)) &
                                          - (fzm(k)*dpdz(k,iCell) + fzp(k)*dpdz(k-1,iCell)) )  ! dpdz is the buoyancy term here.

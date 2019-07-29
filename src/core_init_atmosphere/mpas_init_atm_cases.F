@@ -416,6 +416,7 @@ module init_atm_cases
       integer, dimension(:), pointer :: nEdgesOnEdge, nEdgesOnCell
       integer, dimension(:,:), pointer :: edgesOnEdge, cellsOnEdge, verticesOnEdge, cellsOnCell
       real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge
+      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell, rTildeEdge, rTildeVertex
 
       real (kind=RKIND) :: flux, fluxk, lat1, lat2, eta_v, r_pert, u_pert, lat_pert, lon_pert, r
 
@@ -464,6 +465,7 @@ module init_atm_cases
 
       real (kind=RKIND), pointer :: sphere_radius
       logical, pointer :: on_a_sphere
+      logical, pointer :: config_deep_atmosphere
       real (kind=RKIND), pointer :: config_coef_3rd_order
       integer, pointer :: config_theta_adv_order
       integer, pointer :: config_init_case
@@ -472,6 +474,7 @@ module init_atm_cases
       call mpas_pool_get_config(configs, 'config_init_case', config_init_case)
       call mpas_pool_get_config(configs, 'config_coef_3rd_order', config_coef_3rd_order)
       call mpas_pool_get_config(configs, 'config_theta_adv_order', config_theta_adv_order)
+      call mpas_pool_get_config(configs, 'config_deep_atmosphere', config_deep_atmosphere)
 
 
       !
@@ -493,6 +496,9 @@ module init_atm_cases
       call mpas_pool_get_array(mesh, 'kiteAreasOnVertex', kiteAreasOnVertex)
       call mpas_pool_get_config(mesh, 'on_a_sphere', on_a_sphere)
       call mpas_pool_get_config(mesh, 'sphere_radius', sphere_radius)
+      call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
+      call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
+      call mpas_pool_get_array(mesh, 'rTildeVertex', rTildeVertex)
 
       xCell(:) = xCell(:) * sphere_radius
       yCell(:) = yCell(:) * sphere_radius
@@ -686,6 +692,14 @@ module init_atm_cases
           zz (k,iCell) = (zw(k+1)-zw(k))/(zgrid(k+1,iCell)-zgrid(k,iCell))
         end do
       end do
+
+      if (config_deep_atmosphere)then
+        ! deep (to be done)
+      else
+        rTildeCell(:,:) = 1.0
+        rTildeEdge(:,:) = 1.0
+        rTildeVertex(:,:) = 1.0
+      endif
 
       do i=1, nEdges
         iCell1 = cellsOnEdge(1,i)

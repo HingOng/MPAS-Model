@@ -311,6 +311,12 @@
                      description="Prefix of block mapping file"
                      possible_values="Any valid filename"/>
 
+                <nml_option name="config_deep_atmosphere" type="logical" default_value="false" in_defaults="true"
+		     units="-"
+		     description="Deep atmosphere configuration"
+		     possible_values=".true. or .false."/>
+
+
         </nml_record>
 
 
@@ -563,6 +569,9 @@
                         <var name="q2" packages="met_stage_out"/>
                         <var name="rh2" packages="met_stage_out"/>
                         <var name="t2m" packages="met_stage_out"/>
+			<var name="rTildeCell"/>
+			<var name="rTildeEdge"/>
+			<var name="rTildeVertex"/>
 		</stream>
 
 		<stream name="surface" 
@@ -879,7 +888,18 @@
 
                 <var name="bdyMaskVertex" type="integer" dimensions="nVertices" default_value="0" units="-"
                      description="Indicator of whether an vertex is an interior vertex, a relaxation-zone vertex, or a specified-zone vertex"/>
-        </var_struct>
+        
+                <!-- variables needed for deep atmosphere -->
+		<var name="rTildeCell" type="real" dimensions="nVertLevels nCells" units="-"
+                     description="Nondimensional radius for cells"/>
+                
+		<var name="rTildeEdge" type="real" dimensions="nVertLevels nEdges" units="-"
+                     description="Nondimensional radius for edges"/>
+                
+		<var name="rTildeVertex" type="real" dimensions="nVertLevels nVertices" units="-"
+                     description="Nondimensional radius for vertices"/>
+													       
+	</var_struct>
 
         <var_struct name="state" time_levs="1">
                 <var name="initial_time" type="text" dimensions="" units="YYYY-MM-DD_hh:mm:ss"
@@ -1144,7 +1164,7 @@
 
                 <var name="rho_p" type="real" dimensions="nVertLevels nCells Time" units="kg m^{-3}"
                      description="rho/zz perturbation from the reference state value, advanced over acoustic steps"/>
-        </var_struct>
+	</var_struct>
 
         <var_struct name="diag_physics" time_levs="1">
                 <var name="precipw" type="real" dimensions="nCells Time" units="kg m^{-2}"

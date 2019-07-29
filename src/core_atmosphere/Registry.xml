@@ -526,6 +526,9 @@
 			<var name="ol3"/>
 			<var name="ol4"/>
 			<var name="h_oml_initial"/>
+			<var name="rTildeCell"/>
+			<var name="rTildeEdge"/>
+			<var name="rTildeVertex"/>
 		</stream>
 
 		<stream name="restart" 
@@ -853,6 +856,9 @@
 			<var name="h_oml_initial"/>
 			<var name="hu_oml"/>
 			<var name="hv_oml"/>
+			<var name="rTildeCell"/>
+			<var name="rTildeEdge"/>
+			<var name="rTildeVertex"/>
 		</stream>
 
 		<stream name="output" 
@@ -1421,7 +1427,6 @@
 
                 <var name="rTildeVertex" type="real" dimensions="nVertLevels nVertices" units="-"
                      description="Nondimensional radius for vertices"/>
-
 
         </var_struct>
 

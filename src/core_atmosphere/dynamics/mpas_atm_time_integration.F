@@ -2294,7 +2294,6 @@ module atm_time_integration
             iEdge = edgesOnCell(i,iCell)
 !DIR$ IVDEP
             do k = 2, nVertLevels
-            ! deep Eq. (25)
                flux = edgesOnCell_sign(i,iCell) * (fzm(k) * u_tend(k,iEdge) + fzp(k) * u_tend(k-1,iEdge))
                w_tend(k,iCell) = w_tend(k,iCell)   &
                         - (zb_cell(k,i,iCell) + sign(1.0_RKIND, u_tend(k,iEdge)) * zb3_cell(k,i,iCell)) * flux
@@ -3016,7 +3015,6 @@ module atm_time_integration
             rw(k,iCell) = rw_save(k,iCell) + rw_p(k,iCell)
 
           ! pick up part of diagnosed w from omega - divide by density later
-          ! deep Eq. (25)
             w(k,iCell) = rw(k,iCell)/(fzm(k)*zz(k,iCell)+fzp(k)*zz(k-1,iCell))
                                       
          end do
@@ -3079,7 +3077,6 @@ module atm_time_integration
          do i=1,nEdgesOnCell(iCell)
             iEdge=edgesOnCell(i,iCell)
 
-            ! deep Eq. (25)
             flux = (cf1*ru(1,iEdge) + cf2*ru(2,iEdge) + cf3*ru(3,iEdge))
             w(1,iCell) = w(1,iCell) + edgesOnCell_sign(i,iCell) * &
                                    (zb_cell(1,i,iCell) + sign(1.0_RKIND,flux)*zb3_cell(1,i,iCell))*flux
@@ -5460,6 +5457,8 @@ module atm_time_integration
       real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge, kiteAreasOnVertex, h_edge, h, u, v, &
                                                     vorticity, ke, pv_edge, pv_vertex, pv_cell, gradPVn, gradPVt, &
                                                     divergence
+      ! deep
+      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell, rTildeEdge, rTildeVertex
       integer, dimension(:,:), pointer :: cellsOnEdge, cellsOnVertex, verticesOnEdge, edgesOnCell, edgesOnEdge, edgesOnVertex, &
                                           kiteForCell, verticesOnCell
       real (kind=RKIND), dimension(:,:), pointer :: edgesOnVertex_sign, edgesOnCell_sign
@@ -5506,6 +5505,10 @@ module atm_time_integration
       call mpas_pool_get_array(mesh, 'invAreaTriangle', invAreaTriangle)
       call mpas_pool_get_array(mesh, 'fVertex', fVertex)
       call mpas_pool_get_array(mesh, 'fEdge', fEdge)
+      ! deep
+      call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
+      call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
+      call mpas_pool_get_array(mesh, 'rTildeVertex', rTildeVertex)
 
       call mpas_pool_get_dimension(mesh, 'nCells', nCells)
       call mpas_pool_get_dimension(mesh, 'nEdges', nEdges)
@@ -5516,6 +5519,7 @@ module atm_time_integration
       call atm_compute_solve_diagnostics_work(nCells, nEdges, nVertices, &
                vertexDegree, dt, config_apvm_upwinding, &
                fVertex, fEdge, invAreaTriangle, invAreaCell, dvEdge, dcEdge, invDvEdge, invDcEdge, &
+               rTildeCell, rTildeEdge, rTildeVertex, & ! deep
                weightsOnEdge, kiteAreasOnVertex, h_edge, h, u, v, vorticity, ke, pv_edge, pv_vertex, pv_cell, &
                gradPVn, gradPVt, divergence, cellsOnEdge, cellsOnVertex, verticesOnEdge, edgesOnCell, edgesOnEdge, &
                edgesOnVertex, kiteForCell, verticesOnCell, edgesOnVertex_sign, edgesOnCell_sign, nEdgesOnCell, nEdgesOnEdge, &
@@ -5528,6 +5532,7 @@ module atm_time_integration
    subroutine atm_compute_solve_diagnostics_work(nCells, nEdges, nVertices, &
             vertexDegree, dt, config_apvm_upwinding, &
             fVertex, fEdge, invAreaTriangle, invAreaCell, dvEdge, dcEdge, invDvEdge, invDcEdge, &
+            rTildeCell, rTildeEdge, rTildeVertex, & ! deep
             weightsOnEdge, kiteAreasOnVertex, h_edge, h, u, v, vorticity, ke, pv_edge, pv_vertex, pv_cell, &
             gradPVn, gradPVt, divergence, cellsOnEdge, cellsOnVertex, verticesOnEdge, edgesOnCell, edgesOnEdge, &
             edgesOnVertex, kiteForCell, verticesOnCell, edgesOnVertex_sign, edgesOnCell_sign, nEdgesOnCell, nEdgesOnEdge, &
@@ -5565,6 +5570,10 @@ module atm_time_integration
       real (kind=RKIND), dimension(nVertLevels,nEdges+1) :: gradPVn
       real (kind=RKIND), dimension(nVertLevels,nEdges+1) :: gradPVt
       real (kind=RKIND), dimension(nVertLevels,nCells+1) :: divergence
+      ! deep
+      real (kind=RKIND), dimension(nVertLevels,nCells+1) :: rTildeCell
+      real (kind=RKIND), dimension(nVertLevels,nEdges+1) :: rTildeEdge
+      real (kind=RKIND), dimension(nVertLevels,nVertices+1) :: rTildeVertex
       integer, dimension(2,nEdges+1) :: cellsOnEdge
       integer, dimension(3,nVertices+1) :: cellsOnVertex
       integer, dimension(2,nEdges+1) :: verticesOnEdge
@@ -5622,17 +5631,17 @@ module atm_time_integration
          vorticity(1:nVertLevels,iVertex) = 0.0
          do i=1,vertexDegree
             iEdge = edgesOnVertex(i,iVertex)
-            ! deep Eq. (12)
             s = edgesOnVertex_sign(i,iVertex) * dcEdge(iEdge)
 !DIR$ IVDEP
             do k=1,nVertLevels
-               vorticity(k,iVertex) = vorticity(k,iVertex) + s * u(k,iEdge)
+               ! deep Eq. (12)
+               vorticity(k,iVertex) = vorticity(k,iVertex) + s * u(k,iEdge) * rTildeEdge(k,iEdge)
             end do
          end do
 !DIR$ IVDEP
          do k=1,nVertLevels
             ! deep Eq. (12)
-            vorticity(k,iVertex) = vorticity(k,iVertex) * invAreaTriangle(iVertex)
+            vorticity(k,iVertex) = vorticity(k,iVertex) * invAreaTriangle(iVertex) / rTildeVertex(k,iVertex)**2
          end do
       end do
 
@@ -5644,17 +5653,17 @@ module atm_time_integration
          divergence(1:nVertLevels,iCell) = 0.0
          do i=1,nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i,iCell)
-            ! deep Eq. (11)
             s = edgesOnCell_sign(i,iCell) * dvEdge(iEdge)
 !DIR$ IVDEP
             do k=1,nVertLevels
-              divergence(k,iCell) = divergence(k,iCell) + s * u(k,iEdge)
+              ! deep Eq. (11)
+              divergence(k,iCell) = divergence(k,iCell) + s * u(k,iEdge) * rTildeEdge(k,iEdge)
             end do
          end do
-         ! deep Eq. (11)
          r = invAreaCell(iCell)
          do k = 1,nVertLevels
-            divergence(k,iCell) = divergence(k,iCell) * r
+            ! deep Eq. (11)
+            divergence(k,iCell) = divergence(k,iCell) * r / rTildeCell(k,iCell)**2
          end do
       end do
 
@@ -5953,7 +5962,6 @@ module atm_time_integration
          rw(1,iCell) = 0.0
          rw(nVertLevels+1,iCell) = 0.0
          do k=2,nVertLevels
-         ! deep Eq. (25)
             rw(k,iCell) = w(k,iCell)     &
                           * (fzp(k) * rho_zz(k-1,iCell) + fzm(k) * rho_zz(k,iCell)) &
                           * (fzp(k) * zz(k-1,iCell) + fzm(k) * zz(k,iCell))

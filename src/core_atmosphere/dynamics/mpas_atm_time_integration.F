@@ -2825,6 +2825,8 @@ module atm_time_integration
                                                     rho_pp, rho_zz, rho_base, ruAvg, ru_save, ru_p, u, ru, &
                                                     exner, exner_base, rtheta_base, pressure_p,         &
                                                     zz, theta_m, pressure_b
+      ! deep
+      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell, rTildeEdge
       real (kind=RKIND), dimension(:,:,:), pointer :: scalars
       real (kind=RKIND), dimension(:), pointer :: fzm, fzp
       real (kind=RKIND), dimension(:,:,:), pointer :: zb, zb3, zb_cell, zb3_cell
@@ -2894,6 +2896,9 @@ module atm_time_integration
       call mpas_pool_get_array(mesh, 'cf1', cf1)
       call mpas_pool_get_array(mesh, 'cf2', cf2)
       call mpas_pool_get_array(mesh, 'cf3', cf3)
+      ! deep
+      call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
+      call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
 
 
       call atm_recover_large_step_variables_work(nCells, nEdges, nCellsSolve, nEdgesSolve, dt, ns, rk_step, &
@@ -2902,6 +2907,7 @@ module atm_time_integration
                              rtheta_base, pressure_p, zz, theta_m, pressure_b, scalars, fzm, fzp, &
                              zb, zb3, zb_cell, zb3_cell, edgesOnCell_sign, cellsOnEdge, edgesOnCell, nEdgesOnCell, &
                              cf1, cf2, cf3, &
+                             rTildeCell, rTildeEdge, & ! deep
                              bdyMaskCell, &  !  addition for regional_MPAS
                              cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                              cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -2915,6 +2921,7 @@ module atm_time_integration
                              rtheta_base, pressure_p, zz, theta_m, pressure_b, scalars, fzm, fzp, &
                              zb, zb3, zb_cell, zb3_cell, edgesOnCell_sign, cellsOnEdge, edgesOnCell, nEdgesOnCell, &
                              cf1, cf2, cf3, &
+                             rTildeCell, rTildeEdge, & ! deep
                              bdyMaskCell, &  ! addition for regional_MPAS
                              cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                              cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -2959,6 +2966,9 @@ module atm_time_integration
       real (kind=RKIND), dimension(nVertLevels,nCells+1) :: zz
       real (kind=RKIND), dimension(nVertLevels,nCells+1) :: theta_m
       real (kind=RKIND), dimension(nVertLevels,nCells+1) :: pressure_b
+      ! deep
+      real (kind=RKIND), dimension(nVertLevels,nCells+1) :: rTildeCell
+      real (kind=RKIND), dimension(nVertLevels,nEdges+1) :: rTildeEdge
       real (kind=RKIND), dimension(num_scalars,nVertLevels,nCells+1) :: scalars
       real (kind=RKIND), dimension(nVertLevels) :: fzm
       real (kind=RKIND), dimension(nVertLevels) :: fzp
@@ -3028,11 +3038,11 @@ module atm_time_integration
                                  - dt * rho_zz(k,iCell) * rt_diabatic_tend(k,iCell)
                theta_m(k,iCell) = (rtheta_p(k,iCell) + rtheta_base(k,iCell))/rho_zz(k,iCell)
                ! deep Eq. (23)
-               exner(k,iCell) = (zz(k,iCell)*(rgas/p0)*(rtheta_p(k,iCell)+rtheta_base(k,iCell)))**rcv
+               exner(k,iCell) = (zz(k,iCell)/rTildeCell(k,iCell)**2*(rgas/p0)*(rtheta_p(k,iCell)+rtheta_base(k,iCell)))**rcv
                ! pressure_p is perturbation pressure
                ! deep Eq. (23)
-               pressure_p(k,iCell) = zz(k,iCell) * rgas * (exner(k,iCell)*rtheta_p(k,iCell)+rtheta_base(k,iCell)  &
-                                                          * (exner(k,iCell)-exner_base(k,iCell)))
+               pressure_p(k,iCell) = zz(k,iCell) / rTildeCell(k,iCell)**2 * rgas &
+                                     *(exner(k,iCell)*rtheta_p(k,iCell) + rtheta_base(k,iCell)*(exner(k,iCell)-exner_base(k,iCell)))
             end do
          else
 !DIR$ IVDEP
@@ -3060,7 +3070,8 @@ module atm_time_integration
             ruAvg(k,iEdge) = ru_save(k,iEdge) + (ruAvg(k,iEdge) * invNs)
             ru(k,iEdge) = ru_save(k,iEdge) + ru_p(k,iEdge)
             ! deep Eq. (14)
-            u(k,iEdge) = 2.*ru(k,iEdge)/(rho_zz(k,cell1)+rho_zz(k,cell2))
+            u(k,iEdge) = 2.*ru(k,iEdge)/(rho_zz(k,cell1)/rTildeCell(k,cell1)**2+rho_zz(k,cell2)/rTildeCell(k,cell2)**2) &
+                         /rTildeEdge(k,iEdge)
          end do
       end do
 

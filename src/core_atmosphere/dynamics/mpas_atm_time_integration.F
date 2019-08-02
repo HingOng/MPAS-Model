@@ -5890,6 +5890,9 @@ module atm_time_integration
       real (kind=RKIND), dimension(:,:), pointer :: pressure_base
       real (kind=RKIND), dimension(:,:), pointer :: exner
       real (kind=RKIND), dimension(:,:), pointer :: exner_base
+      ! deep
+      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell
+      real (kind=RKIND), dimension(:,:), pointer :: rTildeEdge
       real (kind=RKIND), dimension(:), pointer :: fzm, fzp
       real (kind=RKIND), dimension(:,:,:), pointer :: zb, zb3, zb_cell, zb3_cell
 
@@ -5929,7 +5932,9 @@ module atm_time_integration
       call mpas_pool_get_array(mesh, 'zb3', zb3)
       call mpas_pool_get_array(mesh, 'zb_cell', zb_cell)
       call mpas_pool_get_array(mesh, 'zb3_cell', zb3_cell)
-
+      ! deep
+      call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
+      call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
 
       rcv = rgas / (cp-rgas)
       p0 = 1.e5  ! this should come from somewhere else...
@@ -5938,7 +5943,7 @@ module atm_time_integration
          do k=1,nVertLevels
             theta_m(k,iCell) = theta(k,iCell) * (1._RKIND + rvord * scalars(index_qv,k,iCell))
             ! deep Eq. (13)
-            rho_zz(k,iCell) = rho(k,iCell) / zz(k,iCell)
+            rho_zz(k,iCell) = rho(k,iCell) * rTildeCell(k,iCell)**2 / zz(k,iCell)
          end do
       end do
 
@@ -5949,7 +5954,8 @@ module atm_time_integration
          cell2 = cellsOnEdge(2,iEdge)
          do k=1,nVertLevels
             ! deep Eq. (14)
-            ru(k,iEdge) = 0.5 * u(k,iEdge) * (rho_zz(k,cell1) + rho_zz(k,cell2))
+            ru(k,iEdge) = 0.5 * u(k,iEdge) * rTildeEdge(k,iEdge) * (rho_zz(k,cell1) / rTildeCell(k,cell1)**2 &
+                                                                  + rho_zz(k,cell2) / rTildeCell(k,cell2)**2)
          end do
       end do
 
@@ -6003,19 +6009,21 @@ module atm_time_integration
       do iCell=cellStart,cellEnd
          do k=1,nVertLevels
             ! deep Eq. (23)
-            exner(k,iCell) = (zz(k,iCell) * (rgas/p0) * (rtheta_p(k,iCell) + rtheta_base(k,iCell)))**rcv
-            exner_base(k,iCell) = (zz(k,iCell) * (rgas/p0) * (rtheta_base(k,iCell)))**rcv  ! WCS addition 20180403
+            exner(k,iCell) = (zz(k,iCell) / rTildeCell(k,iCell)**2 * (rgas/p0) * (rtheta_p(k,iCell) + rtheta_base(k,iCell)))**rcv
+            ! deep Eq. (23)
+            exner_base(k,iCell) = (zz(k,iCell) / rTildeCell(k,iCell)**2 * (rgas/p0) * (rtheta_base(k,iCell)))**rcv  ! WCS addition 20180403
          end do
       end do
 
       do iCell=cellStart,cellEnd
          do k=1,nVertLevels
             ! deep Eq. (23)
-            pressure_p(k,iCell) = zz(k,iCell) * rgas &
+            pressure_p(k,iCell) = zz(k,iCell) / rTildeCell(k,iCell)**2 * rgas &
                                                * (  exner(k,iCell) * rtheta_p(k,iCell) &
                                                   + rtheta_base(k,iCell) * (exner(k,iCell) - exner_base(k,iCell)) &
                                                  )
-            pressure_base(k,iCell) = zz(k,iCell) * rgas * exner_base(k,iCell) * rtheta_base(k,iCell)      ! WCS addition 20180403
+            ! deep Eq. (23)
+            pressure_base(k,iCell) = zz(k,iCell) / rTildeCell(k,iCell)**2 * rgas * exner_base(k,iCell) * rtheta_base(k,iCell)      ! WCS addition 20180403
          end do
       end do
 

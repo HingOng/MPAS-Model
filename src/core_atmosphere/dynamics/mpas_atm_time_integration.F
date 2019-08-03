@@ -2739,6 +2739,8 @@ module atm_time_integration
       integer, intent(in) :: edgeStart, edgeEnd
 
       real (kind=RKIND), dimension(:,:), pointer :: theta_m, ru_p, rtheta_pp, rtheta_pp_old
+      ! deep
+      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell, rTildeEdge
 !      real (kind=RKIND), dimension(:), pointer :: dcEdge
       real (kind=RKIND), pointer :: smdiv, config_len_disp
       real (kind=RKIND), dimension(:), pointer :: specZoneMaskEdge
@@ -2752,6 +2754,9 @@ module atm_time_integration
 
       call mpas_pool_get_array(mesh, 'cellsOnEdge', cellsOnEdge)
       call mpas_pool_get_array(mesh, 'specZoneMaskEdge', specZoneMaskEdge)
+      ! deep
+      call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
+      call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
 !      call mpas_pool_get_array(mesh, 'dcEdge', dcEdge)
       call mpas_pool_get_array(state, 'theta_m', theta_m, 1)
       call mpas_pool_get_array(diag, 'rtheta_pp', rtheta_pp)
@@ -2786,10 +2791,12 @@ module atm_time_integration
 
 !!  scaled 3d divergence damping
                ! deep Eq. (30)
-               divCell1 = -(rtheta_pp(k,cell1)-rtheta_pp_old(k,cell1))
-               divCell2 = -(rtheta_pp(k,cell2)-rtheta_pp_old(k,cell2))
+               divCell1 = -(rtheta_pp(k,cell1)-rtheta_pp_old(k,cell1))/rTildeCell(k,cell1)**2
+               ! deep Eq. (30)
+               divCell2 = -(rtheta_pp(k,cell2)-rtheta_pp_old(k,cell2))/rTildeCell(k,cell2)**2
+               ! deep Eq. (30)
                ru_p(k,iEdge) = ru_p(k,iEdge) + coef_divdamp*(divCell2-divCell1)*(1.0_RKIND - specZoneMaskEdge(iEdge)) &
-                                                      /(theta_m(k,cell1)+theta_m(k,cell2))
+                                                      /(theta_m(k,cell1)+theta_m(k,cell2)) * rTildeEdge(k,iEdge)
 
             end do
          end if ! edges for block-owned cells

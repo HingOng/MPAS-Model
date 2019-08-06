@@ -4868,11 +4868,10 @@ module atm_time_integration
 
             ! horizontal ke gradient and vorticity terms in the vector invariant formulation
             ! of the horizontal momentum equation
-            ! deep Eq. (17) and (28). Not sure if the kinetic energy term is correctly handled.
-            tend_u(k,iEdge) = tend_u(k,iEdge) + rho_edge(k,iEdge)* (q(k) - (ke(k,cell2) - ke(k,cell1))       &
-                                                                 * invDcEdge(iEdge))/rTildeEdge(k,iEdge)     &
+            ! deep Eq. (17) and (28).
+            tend_u(k,iEdge) = tend_u(k,iEdge) + rho_edge(k,iEdge)* (q(k) - (ke(k,cell2) - ke(k,cell1)) &
+                                                                 * invDcEdge(iEdge)/rTildeEdge(k,iEdge))/rTildeEdge(k,iEdge) &
                                              - u(k,iEdge)*0.5*(h_divergence(k,cell1)+h_divergence(k,cell2))/rTildeEdge(k,iEdge) 
-#ifdef CURVATURE
             ! curvature terms for the sphere
             ! deep Eq. (17)
             if (config_deep_atmosphere) then
@@ -4882,7 +4881,6 @@ module atm_time_integration
                                 - u(k,iEdge)*.25*(w(k+1,cell1)+w(k,cell1)+w(k,cell2)+w(k+1,cell2))                  &
                                   *rho_edge(k,iEdge) * inv_r_earth) / rTildeEdge(k,iEdge)
             endif
-#endif
          end do
 
       end do
@@ -5121,22 +5119,22 @@ module atm_time_integration
          end do
       end do
 
-#ifdef CURVATURE
-      do iCell = cellSolveStart, cellSolveEnd
+      if (config_deep_atmosphere) then
+         do iCell = cellSolveStart, cellSolveEnd
 !DIR$ IVDEP
-         do k=2,nVertLevels
-         ! deep Eq. (20)
-            tend_w(k,iCell) = tend_w(k,iCell) + (rho_zz(k,iCell)*fzm(k)+rho_zz(k-1,iCell)*fzp(k))*          &
-                                      ( (fzm(k)*ur_cell(k,iCell)+fzp(k)*ur_cell(k-1,iCell))**2.             &
-                                       +(fzm(k)*vr_cell(k,iCell)+fzp(k)*vr_cell(k-1,iCell))**2. )/r_earth   &
-                                + 2.*omega*cos(latCell(iCell))                                              &
-                                       *(fzm(k)*ur_cell(k,iCell)+fzp(k)*ur_cell(k-1,iCell))                 &
-                                       *(rho_zz(k,iCell)*fzm(k)+rho_zz(k-1,iCell)*fzp(k))
+            do k=2,nVertLevels
+               ! deep Eq. (20)
+               tend_w(k,iCell) = tend_w(k,iCell) + (fzm(k)*rTildeCell(k,iCell)+fzp(k)*rTildeCell(k-1,iCell))   &
+                                   * (    inv_r_earth*(rho_zz(k,iCell)*fzm(k)+rho_zz(k-1,iCell)*fzp(k))        &
+                                       * ( (fzm(k)*ur_cell(k,iCell)+fzp(k)*ur_cell(k-1,iCell))**2.             &
+                                          +(fzm(k)*vr_cell(k,iCell)+fzp(k)*vr_cell(k-1,iCell))**2. )           &
+                                     + 2.*omega*cos(latCell(iCell))                                            &
+                                          *(fzm(k)*ur_cell(k,iCell)+fzp(k)*ur_cell(k-1,iCell))                 &
+                                          *(rho_zz(k,iCell)*fzm(k)+rho_zz(k-1,iCell)*fzp(k))    )
 
+            end do
          end do
-      end do
-#endif
-
+      endif
 
       !
       !  horizontal mixing for w - we could combine this with advection directly (i.e. as a turbulent flux),
@@ -5240,7 +5238,8 @@ module atm_time_integration
             ! deep Eq. (20)
               tend_w_euler(k,iCell) = tend_w_euler(k,iCell) - cqw(k,iCell)*(   &
                                            rdzu(k)*(pp(k,iCell)-pp(k-1,iCell)) &
-                                         - (fzm(k)*dpdz(k,iCell) + fzp(k)*dpdz(k-1,iCell)) )  ! dpdz is the buoyancy term here.
+                                         *(fzm(k)*rTildeCell(k,iCell)+fzp(k)*rTildeCell(k-1,iCell)) &
+                                        - (fzm(k)*dpdz(k,iCell) + fzp(k)*dpdz(k-1,iCell)) )  ! dpdz is the buoyancy term here.
             end do
           end if
 

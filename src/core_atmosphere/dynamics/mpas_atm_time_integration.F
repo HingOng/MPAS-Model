@@ -2350,6 +2350,8 @@ module atm_time_integration
 ! redefine rw_p to be perturbation from time t, change 3a  ! temporary
       real (kind=RKIND), dimension(:,:), pointer :: rw
       real (kind=RKIND), dimension(:,:), pointer :: rw_save
+      ! deep
+      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell
 
       real (kind=RKIND), dimension(:), pointer :: fzm, fzp, rdzw, dcEdge, invDcEdge, invAreaCell, cofrz, dvEdge
 
@@ -2420,6 +2422,8 @@ module atm_time_integration
       call mpas_pool_get_array(mesh, 'cf1', cf1)
       call mpas_pool_get_array(mesh, 'cf2', cf2)
       call mpas_pool_get_array(mesh, 'cf3', cf3)
+      ! deep
+      call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
 
 ! redefine ru_p to be perturbation from time t, change 3b ! temporary
       call mpas_pool_get_array(diag, 'ru', ru)
@@ -2438,6 +2442,7 @@ module atm_time_integration
                                    tend_rw, zgrid, cofwr, cofwz, w, ru, ru_save, rw, rw_save, fzm, fzp, rdzw, dcEdge, invDcEdge, &
                                    invAreaCell, cofrz, dvEdge, nEdgesOnCell, cellsOnEdge, edgesOnCell, edgesOnCell_sign, &
                                    dts, small_step, epssm, cf1, cf2, cf3, &
+                                   rTildeCell, & ! deep
                                    specZoneMaskEdge, specZoneMaskCell &
                                    )
 
@@ -2451,6 +2456,7 @@ module atm_time_integration
                                    tend_rw, zgrid, cofwr, cofwz, w, ru, ru_save, rw, rw_save, fzm, fzp, rdzw, dcEdge, invDcEdge, &
                                    invAreaCell, cofrz, dvEdge, nEdgesOnCell, cellsOnEdge, edgesOnCell, edgesOnCell_sign, &
                                    dts, small_step, epssm, cf1, cf2, cf3, &
+                                   rTildeCell, & ! deep
                                    specZoneMaskEdge, specZoneMaskCell &
                                    )
 
@@ -2500,6 +2506,8 @@ module atm_time_integration
       real (kind=RKIND), dimension(nVertLevels,nEdges+1) :: ru_save
       real (kind=RKIND), dimension(nVertLevels+1,nCells+1) :: rw
       real (kind=RKIND), dimension(nVertLevels+1,nCells+1) :: rw_save
+      ! deep
+      real (kind=RKIND), dimension(nVertLevels,nCells+1) :: rTildeCell
 
       real (kind=RKIND), dimension(nVertLevels) :: fzm
       real (kind=RKIND), dimension(nVertLevels) :: fzp
@@ -2560,9 +2568,12 @@ module atm_time_integration
 !DIR$ IVDEP
               do k=1,nVertLevels
                  ! deep Eq. (19)
-                 pgrad = ((rtheta_pp(k,cell2)-rtheta_pp(k,cell1))*invDcEdge(iEdge) )/(.5*(zz(k,cell2)+zz(k,cell1)))
+                 pgrad = ((rtheta_pp(k,cell2)/rTildeCell(k,cell2)**2-rtheta_pp(k,cell1)/rTildeCell(k,cell1)**2)*invDcEdge(iEdge))&
+                         /(.5*(zz(k,cell2)+zz(k,cell1)))
                  pgrad = cqu(k,iEdge)*0.5*c2*(exner(k,cell1)+exner(k,cell2))*pgrad
-                 pgrad = pgrad + 0.5*zxu(k,iEdge)*gravity*(rho_pp(k,cell1)+rho_pp(k,cell2))
+                 ! deep Eq. (19)
+                 pgrad = pgrad + 0.5*zxu(k,iEdge)*gravity &
+                                 *(rho_pp(k,cell1)/rTildeCell(k,cell1)**2+rho_pp(k,cell2)/rTildeCell(k,cell2)**2)
                  ru_p(k,iEdge) = ru_p(k,iEdge) + dts*(tend_ru(k,iEdge) - (1.0_RKIND - specZoneMaskEdge(iEdge))*pgrad)
               end do
 
@@ -2659,12 +2670,13 @@ module atm_time_integration
 
 !DIR$ IVDEP
          do k=2, nVertLevels
-            ! deep Eq. (21)
+            ! deep Eq. (21).
             rw_p(k,iCell) = rw_p(k,iCell) +  dts*tend_rw(k,iCell)                       &
-                       - cofwz(k,iCell)*((zz(k  ,iCell)*ts(k)                           &
-                                     -zz(k-1,iCell)*ts(k-1))                            &
-                               +resm*(zz(k  ,iCell)*rtheta_pp(k  ,iCell)                &
-                                     -zz(k-1,iCell)*rtheta_pp(k-1,iCell)))              &
+                       - cofwz(k,iCell)*(fzm(k)*rTildeCell(k,iCell)+fzp(k)*rTildeCell(k-1,iCell)) & ! Alternatively, redefine cofwz.
+                                     *((zz(k  ,iCell)*ts(k  )/rTildeCell(k  ,iCell)**2  &
+                                       -zz(k-1,iCell)*ts(k-1)/rTildeCell(k-1,iCell)**2) &
+                               +resm*(zz(k  ,iCell)*rtheta_pp(k  ,iCell)/rTildeCell(k  ,iCell)**2   &
+                                     -zz(k-1,iCell)*rtheta_pp(k-1,iCell)/rTildeCell(k-1,iCell)**2)) &
                        - cofwr(k,iCell)*((rs(k)+rs(k-1))                                &
                                +resm*(rho_pp(k,iCell)+rho_pp(k-1,iCell)))               &
                        + cofwt(k  ,iCell)*(ts(k  )+resm*rtheta_pp(k  ,iCell))           &
@@ -4872,16 +4884,18 @@ module atm_time_integration
             tend_u(k,iEdge) = tend_u(k,iEdge) + rho_edge(k,iEdge)* (q(k) - (ke(k,cell2) - ke(k,cell1)) &
                                                                  * invDcEdge(iEdge)/rTildeEdge(k,iEdge))/rTildeEdge(k,iEdge) &
                                              - u(k,iEdge)*0.5*(h_divergence(k,cell1)+h_divergence(k,cell2))/rTildeEdge(k,iEdge) 
+         end do
             ! curvature terms for the sphere
             ! deep Eq. (17)
-            if (config_deep_atmosphere) then
+         if (config_deep_atmosphere) then
+            do k=1,nVertLevels
                tend_u(k,iEdge) = tend_u(k,iEdge) + ( &
                                 - 2.*omega*cos(angleEdge(iEdge))*cos(latEdge(iEdge))  &
                                   *rho_edge(k,iEdge)*.25*(w(k,cell1)+w(k+1,cell1)+w(k,cell2)+w(k+1,cell2))          & 
                                 - u(k,iEdge)*.25*(w(k+1,cell1)+w(k,cell1)+w(k,cell2)+w(k+1,cell2))                  &
                                   *rho_edge(k,iEdge) * inv_r_earth) / rTildeEdge(k,iEdge)
-            endif
-         end do
+            end do
+         endif
 
       end do
 

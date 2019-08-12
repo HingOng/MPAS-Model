@@ -4348,6 +4348,7 @@ module atm_time_integration
       real (kind=RKIND), pointer :: config_mpas_cam_coef
       logical, pointer :: config_rayleigh_damp_u
       logical, pointer :: config_deep_atmosphere
+      logical, pointer :: on_a_sphere
       real (kind=RKIND), pointer :: config_rayleigh_damp_u_timescale_days
       integer, pointer :: config_number_rayleigh_damp_u_levels
 
@@ -4373,6 +4374,7 @@ module atm_time_integration
       call mpas_pool_get_config(configs, 'config_rayleigh_damp_u_timescale_days', config_rayleigh_damp_u_timescale_days)
       call mpas_pool_get_config(configs, 'config_number_rayleigh_damp_u_levels', config_number_rayleigh_damp_u_levels)
       call mpas_pool_get_config(configs, 'config_deep_atmosphere', config_deep_atmosphere)
+      call mpas_pool_get_config(mesh, 'on_a_sphere', on_a_sphere)
 
       call mpas_pool_get_array(state, 'rho_zz', rho_zz, 2)
       call mpas_pool_get_array(state, 'u', u, 2)
@@ -4512,7 +4514,7 @@ module atm_time_integration
          config_h_theta_eddy_visc4, config_h_mom_eddy_visc4, config_visc4_2dsmag, config_len_disp, rk_step, dt, &
          config_mpas_cam_coef, &
          config_rayleigh_damp_u, config_rayleigh_damp_u_timescale_days, config_number_rayleigh_damp_u_levels, &
-         config_deep_atmosphere, &
+         config_deep_atmosphere, on_a_sphere, &
          tend_rtheta_adv, rthdynten, &
          cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
          cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -4541,7 +4543,7 @@ module atm_time_integration
       config_h_theta_eddy_visc4, config_h_mom_eddy_visc4, config_visc4_2dsmag, config_len_disp, rk_step, dt, &
       config_mpas_cam_coef, &
       config_rayleigh_damp_u, config_rayleigh_damp_u_timescale_days, config_number_rayleigh_damp_u_levels, &
-      config_deep_atmosphere, &
+      config_deep_atmosphere, on_a_sphere, &
       tend_rtheta_adv, rthdynten, &
       cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
       cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -4669,6 +4671,7 @@ module atm_time_integration
 
       logical, intent(in) :: config_rayleigh_damp_u
       logical, intent(in) :: config_deep_atmosphere
+      logical, intent(in) :: on_a_sphere
       real (kind=RKIND), intent(in) :: config_rayleigh_damp_u_timescale_days
       integer, intent(in) :: config_number_rayleigh_damp_u_levels
 
@@ -4715,7 +4718,11 @@ module atm_time_integration
 
       prandtl_inv = 1.0_RKIND / prandtl
       invDt = 1.0_RKIND / dt
-      inv_r_earth = 1.0_RKIND / r_earth
+      if (on_a_sphere) then
+         inv_r_earth = 1.0_RKIND / r_earth
+      else ! on a plane, r_earth -> infinity
+         inv_r_earth = 0.0_RKIND
+      endif
 
        v_mom_eddy_visc2   = config_v_mom_eddy_visc2
        v_theta_eddy_visc2 = config_v_theta_eddy_visc2

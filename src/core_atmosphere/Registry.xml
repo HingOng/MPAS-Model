@@ -248,6 +248,11 @@
 		     units="-"
                      description="Deep atmosphere configuration"
 		     possible_values=".true. or .false."/>
+
+		<nml_option name="config_weak_temperature_gradient" type="logical" default_value="false" in_defaults="true"
+		     units="-"
+		     description="To switch off the adiabatic warming/cooling due to vertical motion for tropical benchmarking tests"
+		     possible_values=".true. or .false."/>
 											       
         </nml_record>
 

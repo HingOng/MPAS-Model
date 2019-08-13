@@ -92,6 +92,11 @@
                      units="-"
                      description="Number of halo layers for fields"
                      possible_values="Integer values, typically 2 or 3; DO NOT CHANGE"/>
+                
+		<nml_option name="config_deep_atmosphere" type="logical" default_value="false" in_defaults="true"
+                     units="-"
+                     description="Deep atmosphere configuration"
+                     possible_values=".true. or .false."/>
 
         </nml_record>
 
@@ -310,12 +315,6 @@
                      units="-"
                      description="Prefix of block mapping file"
                      possible_values="Any valid filename"/>
-
-                <nml_option name="config_deep_atmosphere" type="logical" default_value="false" in_defaults="true"
-		     units="-"
-		     description="Deep atmosphere configuration"
-		     possible_values=".true. or .false."/>
-
 
         </nml_record>
 

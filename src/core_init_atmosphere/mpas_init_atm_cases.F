@@ -408,13 +408,13 @@ module init_atm_cases
       real (kind=RKIND), dimension(:,:,:), pointer :: scalars
 !.. end initialization of moisture.
 
-      integer :: iCell, iCell1, iCell2 , iEdge, vtx1, vtx2, ivtx, i, k, nz, itr, itrp, cell1, cell2
+      integer :: iCell, iCell1, iCell2, iCell3 , iEdge, vtx1, vtx2, ivtx, i, k, nz, itr, itrp, cell1, cell2
       integer, pointer :: nz1, nCellsSolve, nEdges, maxEdges, nVertices
 
       !This is temporary variable here. It just need when calculate tangential velocity v.
       integer :: eoe, j
       integer, dimension(:), pointer :: nEdgesOnEdge, nEdgesOnCell
-      integer, dimension(:,:), pointer :: edgesOnEdge, cellsOnEdge, verticesOnEdge, cellsOnCell
+      integer, dimension(:,:), pointer :: edgesOnEdge, cellsOnEdge, verticesOnEdge, cellsOnCell, cellsOnVertex
       real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge
       real (kind=RKIND), dimension(:,:), pointer :: rTildeCell, rTildeEdge, rTildeVertex
 
@@ -522,6 +522,7 @@ module init_atm_cases
       call mpas_pool_get_array(mesh, 'cellsOnEdge', cellsOnEdge)
       call mpas_pool_get_array(mesh, 'cellsOnCell', cellsOnCell)
       call mpas_pool_get_array(mesh, 'verticesOnEdge', verticesOnEdge)
+      call mpas_pool_get_array(mesh, 'cellsOnVertex', cellsOnVertex)
       call mpas_pool_get_array(mesh, 'deriv_two', deriv_two)
       call mpas_pool_get_array(mesh, 'zb', zb)
       call mpas_pool_get_array(mesh, 'zb3', zb3)
@@ -693,12 +694,34 @@ module init_atm_cases
         end do
       end do
 
-      if (config_deep_atmosphere)then
-        ! deep (to be done)
-      else
-        rTildeCell(:,:) = 1.0
-        rTildeEdge(:,:) = 1.0
-        rTildeVertex(:,:) = 1.0
+      if (config_deep_atmosphere.and.on_a_sphere)then
+         do iCell=1,nCells
+            do k=1,nz
+               rTildeCell(k,iCell) = (zgrid(k,iCell) + r_earth) / r_earth
+            end do
+         end do
+         do i=1, nEdges
+            iCell1 = cellsOnEdge(1,i)
+            iCell2 = cellsOnEdge(2,i)
+            do k=1,nz
+               rTildeEdge(k,i) = 0.5 * (rTildeCell(k,iCell1) + rTildeCell(k,iCell2))
+            end do
+         end do
+         do i=1, nVertices
+            iCell1 = cellsOnVertex(1,i)
+            iCell2 = cellsOnVertex(2,i)
+            iCell3 = cellsOnVertex(3,i)
+            do k=1,nz
+               rTildeVertex(k,i) = 0.5 * ( (kiteAreasOnVertex(1,i)+kiteAreasOnVertex(2,i)) * rTildeCell(k,iCell3) &
+                                         + (kiteAreasOnVertex(2,i)+kiteAreasOnVertex(3,i)) * rTildeCell(k,iCell1) &
+                                         + (kiteAreasOnVertex(3,i)+kiteAreasOnVertex(1,i)) * rTildeCell(k,iCell2) ) &
+                                       / areaTriangle(i)
+            end do
+         end do
+      else ! shallow or on a plane
+        rTildeCell(:,:) = 1.0_RKIND
+        rTildeEdge(:,:) = 1.0_RKIND
+        rTildeVertex(:,:) = 1.0_RKIND
       endif
 
       do i=1, nEdges

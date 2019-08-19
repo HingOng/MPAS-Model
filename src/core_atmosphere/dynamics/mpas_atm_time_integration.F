@@ -2672,7 +2672,7 @@ module atm_time_integration
          do k=2, nVertLevels
             ! deep Eq. (21).
             rw_p(k,iCell) = rw_p(k,iCell) +  dts*tend_rw(k,iCell)                       &
-                       - cofwz(k,iCell)*(fzm(k)*rTildeCell(k,iCell)+fzp(k)*rTildeCell(k-1,iCell)) & ! Alternatively, redefine cofwz.
+                       - cofwz(k,iCell)*(fzm(k)*rTildeCell(k,iCell)**2+fzp(k)*rTildeCell(k-1,iCell)**2) & ! or redefine cofwz.
                                      *((zz(k  ,iCell)*ts(k  )/rTildeCell(k  ,iCell)**2  &
                                        -zz(k-1,iCell)*ts(k-1)/rTildeCell(k-1,iCell)**2) &
                                +resm*(zz(k  ,iCell)*rtheta_pp(k  ,iCell)/rTildeCell(k  ,iCell)**2   &
@@ -5262,7 +5262,7 @@ module atm_time_integration
             ! deep Eq. (20)
               tend_w_euler(k,iCell) = tend_w_euler(k,iCell) - cqw(k,iCell)*(   &
                                            rdzu(k)*(pp(k,iCell)-pp(k-1,iCell)) &
-                                         *(fzm(k)*rTildeCell(k,iCell)+fzp(k)*rTildeCell(k-1,iCell)) &
+                                         *(fzm(k)*rTildeCell(k,iCell)**2+fzp(k)*rTildeCell(k-1,iCell)**2) &
                                         - (fzm(k)*dpdz(k,iCell) + fzp(k)*dpdz(k-1,iCell)) )  ! dpdz is the buoyancy term here.
             end do
           end if

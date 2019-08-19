@@ -697,7 +697,7 @@ module init_atm_cases
       if (config_deep_atmosphere.and.on_a_sphere)then
          do iCell=1,nCells
             do k=1,nz
-               rTildeCell(k,iCell) = (zgrid(k,iCell) + r_earth) / r_earth
+               rTildeCell(k,iCell) = 1.0 + 0.5 * (zgrid(k,iCell)+zgrid(k+1,iCell)) / r_earth
             end do
          end do
          do i=1, nEdges

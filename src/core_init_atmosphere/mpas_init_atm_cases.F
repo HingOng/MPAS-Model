@@ -416,6 +416,7 @@ module init_atm_cases
       integer, dimension(:), pointer :: nEdgesOnEdge, nEdgesOnCell
       integer, dimension(:,:), pointer :: edgesOnEdge, cellsOnEdge, verticesOnEdge, cellsOnCell, cellsOnVertex
       real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge
+      ! deep
       real (kind=RKIND), dimension(:,:), pointer :: rTildeCell, rTildeEdge, rTildeVertex
 
       real (kind=RKIND) :: flux, fluxk, lat1, lat2, eta_v, r_pert, u_pert, lat_pert, lon_pert, r
@@ -444,6 +445,8 @@ module init_atm_cases
       integer, parameter :: nlat=721
       real (kind=RKIND), dimension(nVertLevels) :: flux_zonal
       real (kind=RKIND), dimension(nVertLevels + 1, nlat) :: zgrid_2d
+      ! deep
+      real (kind=RKIND), dimension(nVertLevels, nlat) :: rTilde_2d
       real (kind=RKIND), dimension(nVertLevels, nlat) :: u_2d, pp_2d, rho_2d, qv_2d, etavs_2d, zz_2d
       real (kind=RKIND), dimension(nVertLevels, nlat) :: p_2d, pb_2d, ppb_2d, rr_2d, rb_2d, tb_2d, rtb_2d
       real (kind=RKIND), dimension(nVertLevels, nlat-1) :: zx_2d 
@@ -755,6 +758,7 @@ module init_atm_cases
 !**************  section for 2d (z,lat) calc for zonal velocity
 
       dlat = 0.5*pii/float(nlat-1)
+      rTilde_2d(:,:) = 1.0_RKIND
       do i = 1,nlat
 
         lat_2d(i) = float(i-1)*dlat
@@ -774,12 +778,18 @@ module init_atm_cases
           zz_2d(k,i) = (zw(k+1)-zw(k))/(zgrid_2d(k+1,i)-zgrid_2d(k,i))
         end do
 
+        if (config_deep_atmosphere.and.on_a_sphere)then
+           do k=1,nz
+              rTilde_2d(k,i) = 1.0 + 0.5 * (zgrid_2d(k,i)+zgrid_2d(k+1,i)) / r_earth
+           end do
+        endif
+
         do k=1,nz1
           ztemp    = .5*(zgrid_2d(k+1,i)+zgrid_2d(k,i))
           ppb_2d(k,i) = p0*exp(-gravity*ztemp/(rgas*t0b)) 
           pb_2d(k,i) = (ppb_2d(k,i)/p0)**(rgas/cp)
           ! deep Eq. (13)
-          rb_2d(k,i) = ppb_2d(k,i)/(rgas*t0b*zz_2d(k,i))
+          rb_2d(k,i) = ppb_2d(k,i)*rTilde_2d(k,i)/(rgas*t0b*zz_2d(k,i))
           tb_2d(k,i) = t0b/pb_2d(k,i)
           rtb_2d(k,i) = rb_2d(k,i)*tb_2d(k,i)
           p_2d(k,i) = pb_2d(k,i)
@@ -865,6 +875,7 @@ module init_atm_cases
         end do
 
         call init_atm_recompute_geostrophic_wind(u_2d, rho_2d, pp_2d, qv_2d, lat_2d, zz_2d, zx_2d,     &
+                                        rTilde_2d, & ! deep
                                         cf1, cf2, cf3, fzm, fzp, rdzw, nz1, nlat, dlat, sphere_radius)
 
       end if
@@ -882,7 +893,7 @@ module init_atm_cases
           ppb(k,i) = p0*exp(-gravity*ztemp/(rgas*t0b)) 
           pb (k,i) = (ppb(k,i)/p0)**(rgas/cp)
           ! deep Eq. (13)
-          rb (k,i) = ppb(k,i)/(rgas*t0b*zz(k,i))
+          rb (k,i) = ppb(k,i)*rTildeCell(k,i)/(rgas*t0b*zz(k,i))
           tb (k,i) = t0b/pb(k,i)
           rtb(k,i) = rb(k,i)*tb(k,i)
           p  (k,i) = pb(k,i)
@@ -1055,7 +1066,8 @@ module init_atm_cases
          cell2 = cellsOnEdge(2,iEdge)
          do k=1,nz1
             ! deep Eq. (14)
-            ru(k,iEdge)  = 0.5*(rho_zz(k,cell1)+rho_zz(k,cell2))*u(k,iEdge)
+            ru(k,iEdge)  = 0.5*(rho_zz(k,cell1)/rTildeCell(k,cell1)**2+rho_zz(k,cell2)/rTildeCell(k,cell2)**2)*u(k,iEdge) &
+                              *rTildeEdge(k,iEdge)
          end do
 
       !
@@ -1193,7 +1205,7 @@ module init_atm_cases
       do iCell=1,nCells
          do k=1,nVertLevels
             ! deep Eq. (13)
-            rho(k,iCell) = rho_zz(k,iCell) * zz(k,iCell)
+            rho(k,iCell) = rho_zz(k,iCell) * zz(k,iCell) / rTildeCell(k,iCell)
             theta(k,iCell) = t(k,iCell) / (1.0 + 1.61 * scalars(index_qv,k,iCell))
          end do
       end do
@@ -1254,6 +1266,7 @@ module init_atm_cases
 
    !SHP-balance
    subroutine init_atm_recompute_geostrophic_wind(u_2d,rho_2d,pp_2d,qv_2d,lat_2d,zz_2d,zx_2d,     &
+                                         rTilde_2d, & ! deep
                                          cf1,cf2,cf3,fzm,fzp,rdzw,nz1,nlat,dlat,rad)
 
       implicit none
@@ -1261,6 +1274,8 @@ module init_atm_cases
       integer, intent(in) :: nz1,nlat
       real (kind=RKIND), dimension(nz1,nlat), intent(inout) :: u_2d
       real (kind=RKIND), dimension(nz1,nlat), intent(in) :: rho_2d, pp_2d, qv_2d, zz_2d
+      ! deep
+      real (kind=RKIND), dimension(nz1,nlat), intent(in) :: rTilde_2d
       real (kind=RKIND), dimension(nz1,nlat-1), intent(in) :: zx_2d
       real (kind=RKIND), dimension(nlat), intent(in) :: lat_2d
       real (kind=RKIND), dimension(nz1), intent(in) :: fzm, fzp, rdzw
@@ -1307,7 +1322,9 @@ module init_atm_cases
       do i=1,nlat-1
          do k=1,nz1
             u(k,i) = .5*(u_2d(k,i)+u_2d(k,i+1))
-            ru(k,i) = u(k,i)*(rho_2d(k,i)+rho_2d(k,i+1))*.5
+            ! deep Eq. (14)
+            ru(k,i) = u(k,i)*(rho_2d(k,i)/rTilde_2d(k,i)**2+rho_2d(k,i+1)/rTilde_2d(k,i+1)**2) &
+                            *(rTilde_2d(k,i)+rTilde_2d(k,i+1))*.25
          end do
       end do
    
@@ -1325,7 +1342,9 @@ module init_atm_cases
               qtot = .5*(qv_2d(k,i)+qv_2d(k,i+1))
               ru(k,i) = - ( 1./(1.+qtot)*pgrad(k,i) + tan(phi)/r_earth*u(k,i)*ru(k,i) )/f(i)
             end if
-              u(k,i) = ru(k,i)*2./(rho_2d(k,i)+rho_2d(k,i+1))
+              ! deep Eq. (14)
+              u(k,i) = ru(k,i)*4./(rho_2d(k,i)/rTilde_2d(k,i)**2+rho_2d(k,i+1)/rTilde_2d(k,i+1)**2) &
+                                 /(rTilde_2d(k,i)+rTilde_2d(k,i+1))
          end do
       end do
       end do

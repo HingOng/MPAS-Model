@@ -4890,9 +4890,10 @@ module atm_time_integration
 
             ! horizontal ke gradient and vorticity terms in the vector invariant formulation
             ! of the horizontal momentum equation
-            ! deep Eq. (17) and (28).
-            tend_u(k,iEdge) = tend_u(k,iEdge) + rho_edge(k,iEdge)* (q(k) - (ke(k,cell2) - ke(k,cell1)) &
-                                                                 * invDcEdge(iEdge)/rTildeEdge(k,iEdge))/rTildeEdge(k,iEdge) &
+            ! deep Eq. (17).
+            tend_u(k,iEdge) = tend_u(k,iEdge) + 0.5 * (rho_zz(k,cell1)/rTildeCell(k,cell1)**2 &
+                                                      +rho_zz(k,cell2)/rTildeCell(k,cell2)**2) &
+                                                    * (q(k) - (ke(k,cell2)-ke(k,cell1))*invDcEdge(iEdge)) &
                                              - u(k,iEdge)*0.5*(h_divergence(k,cell1)+h_divergence(k,cell2))/rTildeEdge(k,iEdge) 
          end do
             ! curvature terms for the sphere

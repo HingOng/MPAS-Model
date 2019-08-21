@@ -1194,6 +1194,13 @@ module init_atm_cases
          end do
       end do
 
+      ! Redefine rho_base using deep Eq. (13)
+      do iCell=1,nCells
+         do k=1,nVertLevels
+            rb(k,iCell) = rb(k,iCell) * rTildeCell(k,iCell)
+         end do
+      end do
+
    end subroutine init_atm_case_jw
 
 

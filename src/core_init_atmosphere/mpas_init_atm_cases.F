@@ -778,7 +778,6 @@ module init_atm_cases
           ztemp    = .5*(zgrid_2d(k+1,i)+zgrid_2d(k,i))
           ppb_2d(k,i) = p0*exp(-gravity*ztemp/(rgas*t0b)) 
           pb_2d(k,i) = (ppb_2d(k,i)/p0)**(rgas/cp)
-          ! deep Eq. (13)
           rb_2d(k,i) = ppb_2d(k,i)/(rgas*t0b*zz_2d(k,i))
           tb_2d(k,i) = t0b/pb_2d(k,i)
           rtb_2d(k,i) = rb_2d(k,i)*tb_2d(k,i)
@@ -881,7 +880,6 @@ module init_atm_cases
           ztemp    = .5*(zgrid(k+1,i)+zgrid(k,i))
           ppb(k,i) = p0*exp(-gravity*ztemp/(rgas*t0b)) 
           pb (k,i) = (ppb(k,i)/p0)**(rgas/cp)
-          ! deep Eq. (13)
           rb (k,i) = ppb(k,i)/(rgas*t0b*zz(k,i))
           tb (k,i) = t0b/pb(k,i)
           rtb(k,i) = rb(k,i)*tb(k,i)
@@ -1054,7 +1052,6 @@ module init_atm_cases
          cell1 = cellsOnEdge(1,iEdge)
          cell2 = cellsOnEdge(2,iEdge)
          do k=1,nz1
-            ! deep Eq. (14)
             ru(k,iEdge)  = 0.5*(rho_zz(k,cell1)+rho_zz(k,cell2))*u(k,iEdge)
          end do
 
@@ -1192,7 +1189,6 @@ module init_atm_cases
       ! Compute rho and theta from rho_zz and theta_m
       do iCell=1,nCells
          do k=1,nVertLevels
-            ! deep Eq. (13)
             rho(k,iCell) = rho_zz(k,iCell) * zz(k,iCell)
             theta(k,iCell) = t(k,iCell) / (1.0 + 1.61 * scalars(index_qv,k,iCell))
          end do

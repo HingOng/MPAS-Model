@@ -1959,6 +1959,8 @@ module atm_time_integration
 
       real (kind=RKIND), dimension(:,:), pointer :: zz, cqw, p, t, rb, rtb, pb, rt
       real (kind=RKIND), dimension(:,:), pointer :: cofwr, cofwz, coftz, cofwt, a_tri, alpha_tri, gamma_tri
+      ! deep
+      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell
       real (kind=RKIND), dimension(:), pointer :: cofrz, rdzw, fzm, fzp, rdzu
       real (kind=RKIND), dimension(:,:,:), pointer :: scalars
 
@@ -1974,6 +1976,8 @@ module atm_time_integration
       call mpas_pool_get_array(mesh, 'fzm', fzm)
       call mpas_pool_get_array(mesh, 'fzp', fzp)
       call mpas_pool_get_array(mesh, 'zz', zz)
+      ! deep
+      call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
 
       call mpas_pool_get_array(diag, 'cqw', cqw)
       call mpas_pool_get_array(diag, 'exner', p)
@@ -2001,6 +2005,7 @@ module atm_time_integration
 
       call atm_compute_vert_imp_coefs_work(nCells, moist_start, moist_end, dts, epssm, &
                                    zz, cqw, p, t, rb, rtb, pb, rt, cofwr, cofwz, coftz, cofwt, &
+                                   rTildeCell, & ! deep
                                    a_tri, alpha_tri, gamma_tri, cofrz, rdzw, fzm, fzp, rdzu, scalars, &
                                    cellStart, cellEnd, edgeStart, edgeEnd, &
                                    cellSolveStart, cellSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -2011,6 +2016,7 @@ module atm_time_integration
 
    subroutine atm_compute_vert_imp_coefs_work(nCells, moist_start, moist_end, dts, epssm, &
                                    zz, cqw, p, t, rb, rtb, pb, rt, cofwr, cofwz, coftz, cofwt, &
+                                   rTildeCell, & ! deep
                                    a_tri, alpha_tri, gamma_tri, cofrz, rdzw, fzm, fzp, rdzu, scalars, &
                                    cellStart, cellEnd, edgeStart, edgeEnd, &
                                    cellSolveStart, cellSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -2042,6 +2048,8 @@ module atm_time_integration
       real (kind=RKIND), dimension(nVertLevels,nCells+1) :: a_tri
       real (kind=RKIND), dimension(nVertLevels,nCells+1) :: alpha_tri
       real (kind=RKIND), dimension(nVertLevels,nCells+1) :: gamma_tri
+      ! deep
+      real (kind=RKIND), dimension(nVertLevels,nCells+1) :: rTildeCell
       real (kind=RKIND), dimension(nVertLevels) :: cofrz
       real (kind=RKIND), dimension(nVertLevels) :: rdzw
       real (kind=RKIND), dimension(nVertLevels) :: fzm
@@ -2075,7 +2083,9 @@ module atm_time_integration
 
 !DIR$ IVDEP
          do k=2,nVertLevels
-            cofwr(k,iCell) =.5*dtseps*gravity*(fzm(k)*zz(k,iCell)+fzp(k)*zz(k-1,iCell))
+            ! deep Eq. (31)
+            cofwr(k,iCell) =.5*dtseps*gravity*(fzm(k)*zz(k  ,iCell)/rTildeCell(k  ,iCell)**2 &
+                                              +fzp(k)*zz(k-1,iCell)/rTildeCell(k-1,iCell)**2)
          end do
          coftz(1,iCell) = 0.0
 !DIR$ IVDEP
@@ -2094,7 +2104,8 @@ module atm_time_integration
 !            end do
             qtotal = qtot(k,iCell)
 
-            cofwt(k,iCell) = .5*dtseps*rcv*zz(k,iCell)*gravity*rb(k,iCell)/(1.+qtotal)  &
+            ! deep Eq. (31)
+            cofwt(k,iCell) = .5*dtseps*rcv*zz(k,iCell)*gravity/rTildeCell(k,iCell)**2*rb(k,iCell)/(1.+qtotal)  &
                                 *p(k,iCell)/((rtb(k,iCell)+rt(k,iCell))*pb(k,iCell))
 !            cofwt(k,iCell) = 0.
          end do
@@ -2351,7 +2362,7 @@ module atm_time_integration
       real (kind=RKIND), dimension(:,:), pointer :: rw
       real (kind=RKIND), dimension(:,:), pointer :: rw_save
       ! deep
-      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell
+      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell, rTildeEdge
 
       real (kind=RKIND), dimension(:), pointer :: fzm, fzp, rdzw, dcEdge, invDcEdge, invAreaCell, cofrz, dvEdge
 
@@ -2424,6 +2435,7 @@ module atm_time_integration
       call mpas_pool_get_array(mesh, 'cf3', cf3)
       ! deep
       call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
+      call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
 
 ! redefine ru_p to be perturbation from time t, change 3b ! temporary
       call mpas_pool_get_array(diag, 'ru', ru)
@@ -2442,7 +2454,7 @@ module atm_time_integration
                                    tend_rw, zgrid, cofwr, cofwz, w, ru, ru_save, rw, rw_save, fzm, fzp, rdzw, dcEdge, invDcEdge, &
                                    invAreaCell, cofrz, dvEdge, nEdgesOnCell, cellsOnEdge, edgesOnCell, edgesOnCell_sign, &
                                    dts, small_step, epssm, cf1, cf2, cf3, &
-                                   rTildeCell, & ! deep
+                                   rTildeCell, rTildeEdge, & ! deep
                                    specZoneMaskEdge, specZoneMaskCell &
                                    )
 
@@ -2456,7 +2468,7 @@ module atm_time_integration
                                    tend_rw, zgrid, cofwr, cofwz, w, ru, ru_save, rw, rw_save, fzm, fzp, rdzw, dcEdge, invDcEdge, &
                                    invAreaCell, cofrz, dvEdge, nEdgesOnCell, cellsOnEdge, edgesOnCell, edgesOnCell_sign, &
                                    dts, small_step, epssm, cf1, cf2, cf3, &
-                                   rTildeCell, & ! deep
+                                   rTildeCell, rTildeEdge, & ! deep
                                    specZoneMaskEdge, specZoneMaskCell &
                                    )
 
@@ -2508,6 +2520,7 @@ module atm_time_integration
       real (kind=RKIND), dimension(nVertLevels+1,nCells+1) :: rw_save
       ! deep
       real (kind=RKIND), dimension(nVertLevels,nCells+1) :: rTildeCell
+      real (kind=RKIND), dimension(nVertLevels,nEdges+1) :: rTildeEdge
 
       real (kind=RKIND), dimension(nVertLevels) :: fzm
       real (kind=RKIND), dimension(nVertLevels) :: fzp
@@ -2571,9 +2584,9 @@ module atm_time_integration
                  pgrad = ((rtheta_pp(k,cell2)/rTildeCell(k,cell2)**2-rtheta_pp(k,cell1)/rTildeCell(k,cell1)**2)*invDcEdge(iEdge))&
                          /(.5*(zz(k,cell2)+zz(k,cell1)))
                  pgrad = cqu(k,iEdge)*0.5*c2*(exner(k,cell1)+exner(k,cell2))*pgrad
-                 ! deep Eq. (19)
-                 pgrad = pgrad + 0.5*zxu(k,iEdge)*gravity &
-                                 *(rho_pp(k,cell1)/rTildeCell(k,cell1)**2+rho_pp(k,cell2)/rTildeCell(k,cell2)**2)
+                 ! deep Eq. (19) and (31)
+                 pgrad = pgrad + 0.5*zxu(k,iEdge)*gravity/rTildeEdge(k,iEdge)**2 & ! deep Eq. (31)
+                                 *(rho_pp(k,cell1)/rTildeCell(k,cell1)**2+rho_pp(k,cell2)/rTildeCell(k,cell2)**2) ! deep Eq. (19)
                  ru_p(k,iEdge) = ru_p(k,iEdge) + dts*(tend_ru(k,iEdge) - (1.0_RKIND - specZoneMaskEdge(iEdge))*pgrad)
               end do
 
@@ -4823,7 +4836,7 @@ module atm_time_integration
 !DIR$ IVDEP
           do k = 1,nVertLevels
             tend_rho(k,iCell) = -h_divergence(k,iCell)-rdzw(k)*(rw(k+1,iCell)-rw(k,iCell)) + tend_rho_physics(k,iCell)
-            dpdz(k,iCell) = -gravity*(rb(k,iCell)*(qtot(k,iCell)) + rr_save(k,iCell)*(1.+qtot(k,iCell)))
+            dpdz(k,iCell) = -gravity/rTildeCell(k,iCell)**2*(rb(k,iCell)*(qtot(k,iCell)) + rr_save(k,iCell)*(1.+qtot(k,iCell)))
           end do
         end do
       end if

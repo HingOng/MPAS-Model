@@ -1234,6 +1234,8 @@ module pv_diagnostics
       integer, pointer :: nCells, nVertLevels, index_qv
       real (kind=RKIND) :: pvuVal, missingVal, stratoPV
       real (kind=RKIND), dimension(:,:), pointer :: theta, rho, theta_m, rho_zz, zz, dtheta_dt_mix, tend_theta_euler
+      ! deep
+      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell
       type (field2DReal), pointer :: theta_f, uReconstructX_f, uReconstructY_f, uReconstructZ_f, w_f, epv_f
       real (kind=RKIND), dimension(:,:,:), pointer :: scalars
 
@@ -1249,11 +1251,14 @@ module pv_diagnostics
       call mpas_pool_get_array(diag, 'rho', rho)
 
       call mpas_pool_get_array(mesh, 'zz', zz)
+      ! deep
+      call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
 
       do iCell=1,nCells
          do k=1,nVertLevels
             theta(k,iCell) = theta_m(k,iCell) / (1._RKIND + rvord * scalars(index_qv,k,iCell))
-            rho(k,iCell) = rho_zz(k,iCell) * zz(k,iCell)
+            ! deep Eq. (13)
+            rho(k,iCell) = rho_zz(k,iCell) * zz(k,iCell) / rTildeCell(k,iCell)**2
          end do
       end do
       

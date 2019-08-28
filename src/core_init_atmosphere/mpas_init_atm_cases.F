@@ -162,7 +162,7 @@ module init_atm_cases
 
       else if (config_init_case == 10 ) then
 
-         call mpas_log_write(' compression Rossby wave test case ')
+         call mpas_log_write(' compressional Rossby wave test case ')
          block_ptr => domain % blocklist
          do while (associated(block_ptr))
          
@@ -2588,9 +2588,9 @@ module init_atm_cases
    end subroutine init_atm_case_mtn_wave
 
    subroutine init_atm_case_compressional_Rossby_wave(dminfo, mesh, nCells, nVertLevels, state, diag, configs, init_case)
-   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-   ! Setup baroclinic wave test case from Jablonowski and Williamson 2008 (QJRMS)
-   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+   ! Setup compressional Rossby wave test case from Ong and Roundy 2019 (QJRMS, under review)!
+   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
       implicit none
 
@@ -2603,43 +2603,31 @@ module init_atm_cases
       type (mpas_pool_type), intent(inout) :: configs
       integer, intent(in) :: init_case
 
-      real (kind=RKIND), parameter :: t0=288., hm=250.
+      real (kind=RKIND), parameter :: t0=311. ! density scale height = 9.1 km
 
       real (kind=RKIND), dimension(:), pointer :: rdzw, dzu, rdzu, fzm, fzp
       real (kind=RKIND), dimension(:,:), pointer :: zgrid, zxu, zz, hx, cqw
       real (kind=RKIND), dimension(:,:), pointer :: ppb, pb, rho_zz, rb, rr, tb, rtb, p, pp, dss, t, rt, u, ru
       real (kind=RKIND), dimension(:,:,:), pointer :: scalars, deriv_two, zb, zb3
 
-      !This is temporary variable here. It just need when calculate tangential velocity v.
-      integer :: eoe, j
       integer, dimension(:), pointer :: nEdgesOnEdge, nEdgesOnCell
       integer, dimension(:,:), pointer :: edgesOnEdge, cellsOnEdge, cellsOnCell
       real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge
 
-      integer :: iCell, iCell1, iCell2 , iEdge, vtx1, vtx2, ivtx, i, k, nz, itr, itrp, cell1, cell2, nz1
+      integer :: iCell, iCell1, iCell2 , iEdge, vtx1, vtx2, ivtx, i, k, nz, nz1
       integer, pointer :: nEdges, maxEdges, nCellsSolve, nVertices
       integer, pointer :: index_qv
 
-      real (kind=RKIND) :: ptop, pitop, ptopb, p0, flux, d2fdx2_cell1, d2fdx2_cell2
-
+      real (kind=RKIND) :: p0
       real (kind=RKIND) :: ztemp, zd, zt, dz, str
-
-      real (kind=RKIND), dimension(nVertLevels, nCells) :: relhum
-      real (kind=RKIND) :: es, qvs, xnutr, ptemp
-      integer :: iter
+      real (kind=RKIND) :: xnutr
 
       real (kind=RKIND), dimension(nVertLevels + 1 ) :: zc, zw, ah
       real (kind=RKIND), dimension(nVertLevels ) :: zu, dzw, rdzwp, rdzwm
 
       real (kind=RKIND) :: d1, d2, d3, cof1, cof2
-      real (kind=RKIND) :: um, vm,rcp, rcv
-      real (kind=RKIND) :: xmid, temp, pres, a_scale
-
-      real (kind=RKIND) :: xi, xa, xc, xla, zinv, xn2, xn2m, xn2l, sm, dzh, dzht, dzmin, z_edge, z_edge3
-
-      integer, dimension(nCells, 2) :: next_cell
-      real (kind=RKIND),  dimension(nCells) :: hxzt
-      logical, parameter :: terrain_smooth = .false.
+      real (kind=RKIND) :: rcp, rcv
+      real (kind=RKIND) :: temp, pres, a_scale
 
       real (kind=RKIND), dimension(:), pointer :: xCell, yCell, zCell
       real (kind=RKIND), dimension(:), pointer :: xEdge, yEdge, zEdge
@@ -2695,7 +2683,7 @@ module init_atm_cases
       !
       ! Scale all distances
       !
-      a_scale = 1.0
+      a_scale = 10.0 ! Since xCell ranges from 500 m to 200000 m, this makes the periodic domain width 2000000 m
 
       xCell(:) = xCell(:) * a_scale
       yCell(:) = yCell(:) * a_scale
@@ -2766,21 +2754,16 @@ module init_atm_cases
       call atm_initialize_advection_rk(mesh, nCells, nEdges, maxEdges, on_a_sphere, sphere_radius )
       call atm_initialize_deformation_weights(mesh, nCells, on_a_sphere, sphere_radius)
 
-      xnutr = 0.1
-      zd = 10500.
+      xnutr = 0. ! no w damping
+      zd = 12500. ! useless
 
       p0 = 1.e+05
       rcp = rgas/cp
       rcv = rgas/(cp-rgas)
 
-      ! for hx computation
-      xa = 5000. !SHP - should be changed based on grid distance
-      xla = 4000.
-      xc = maxval (xCell(:))/2.
-
       !     metrics for hybrid coordinate and vertical stretching
       str = 1.0
-      zt = 21000.
+      zt = 12500.
       dz = zt/float(nz1)
 !      call mpas_log_write(' dz = $r', realArgs=(/dz/))
 
@@ -2839,65 +2822,14 @@ module init_atm_cases
       cf2  = fzm(2) - cof1 - cof2
       cf3  = cof2
 
-! setting for terrain
-      do iCell=1,nCells
-         xi = xCell(iCell)
-         !====1. for pure cosine mountain
-         ! if(abs(xi-xc).ge.2.*xa)  then
-         !    hx(1,iCell) = 0.
-         ! else
-         !    hx(1,iCell) = hm*cos(.5*pii*(xi-xc)/(2.*xa))**2.
-         ! end if
-
-         !====2. for cosine mountain
-         !if(abs(xi-xc).lt.xa)  THEN
-         !     hx(1,iCell) = hm*cos(pii*(xi-xc)/xla)**2. *cos(.5*pii*(xi-xc)/xa )**2.
-         ! else
-         !    hx(1,iCell) = 0.
-         ! end if
-
-         !====3. for shock mountain
-         hx(1,iCell) = hm*exp(-((xi-xc)/xa)**2)*cos(pii*(xi-xc)/xla)**2.
-
-         hx(nz,iCell) = zt
-
-!***** SHP -> get the temporary point information for the neighbor cell ->> should be changed!!!!!
-         do i=1,nCells
-            !option 1
-            !IF(yCell(i).eq.yCell(iCell).and.xCell(i).eq.xCell(iCell)-sqrt(3.)*dcEdge(1)) next_cell(iCell,1) = i
-            !IF(yCell(i).eq.yCell(iCell).and.xCell(i).eq.xCell(iCell)+sqrt(3.)*dcEdge(1)) next_cell(iCell,2) = i
-            !option 2
-            next_cell(iCell,1) = iCell - 8 ! note ny=4
-            next_cell(iCell,2) = iCell + 8 ! note ny=4
-
-            if (xCell(iCell).le. 3.*dcEdge(1)) then
-                next_cell(iCell,1) = 1
-            else if (xCell(iCell).ge. maxval(xCell(:))-3.*dcEdge(1)) then
-                next_cell(iCell,2) = 1
-            end if
-
-         end do
-      end do
+      hx(:,:) = 0.  ! compressional Rossby waves on flat plane
 
       call mpas_log_write(' hx computation complete ')
 
-      if (terrain_smooth) then
-         call mpas_log_write('***************************************************************************', messageType=MPAS_LOG_ERR)
-         call mpas_log_write('Please contact the MPAS-A developers for up-to-date terrain-smoothing code.', messageType=MPAS_LOG_ERR)
-         call mpas_log_write('Otherwise, set terrain_smooth=.false. in the mountain wave test case',        messageType=MPAS_LOG_ERR)
-         call mpas_log_write('   initialization routine and re-compile.',                                   messageType=MPAS_LOG_ERR)
-         call mpas_log_write('***************************************************************************', messageType=MPAS_LOG_CRIT)
-      end if
-
       do iCell=1,nCells
         do k=1,nz
-            if (terrain_smooth) then
-            zgrid(k,iCell) = ah(k)*(zc(k)*(1.-hx(k,iCell)/zt)+hx(k,iCell)) &
+           zgrid(k,iCell) = ah(k)*(zc(k)*(1.-hx(k,iCell)/zt)+hx(k,iCell)) &
                            + (1.-ah(k)) * zc(k)
-            else
-            zgrid(k,iCell) = ah(k)*(zc(k)*(1.-hx(1,iCell)/zt)+hx(1,iCell)) &
-                           + (1.-ah(k)) * zc(k)
-            end if
         end do
         do k=1,nz1
           zz (k,iCell) = (zw(k+1)-zw(k))/(zgrid(k+1,iCell)-zgrid(k,iCell))
@@ -2925,294 +2857,41 @@ module init_atm_cases
       call mpas_log_write(' grid metrics setup complete ')
 
 !
-! mountain wave initialization
-!
-         !SHP-original
-         !zinv = 1000.
-         !SHP-schar case
-         zinv = 3000.
-
-         xn2  = 0.0001
-         xn2m = 0.0000
-         xn2l = 0.0001
-
-         vm = 10.
-         um = 0.
-
-         do k=1,nz1
-           v_init(k) = vm
-           u_init(k) = um
-         end do
-
-         do i=1,nCells
-            do k=1,nz1
-               ztemp   = .5*(zgrid(k,i)+zgrid(k+1,i))
-               tb(k,i) =  t0*(1. + xn2m/gravity*ztemp)
-               if(ztemp .le. zinv) then
-                  t (k,i) = t0*(1.+xn2l/gravity*ztemp)
-               else
-                  t (k,i) = t0*(1.+xn2l/gravity*zinv+xn2/gravity*(ztemp-zinv))
-               end if
-                  relhum(k,i) = 0.
-            end do
-         end do
-
-!  set the velocity field - we are on a plane here.
-
-         do i=1, nEdges
-            cell1 = cellsOnEdge(1,i)
-            cell2 = cellsOnEdge(2,i)
-            if(cell1 <= nCellsSolve .or. cell2 <= nCellsSolve) then
-            do k=1,nz1
-               ztemp = .25*( zgrid(k,cell1 )+zgrid(k+1,cell1 )  &
-                            +zgrid(k,cell2)+zgrid(k+1,cell2))
-               u(k,i) =   vm*sin(angleEdge(i)) + um*cos(angleEdge(i))
-            end do
-            end if
-         end do
-
-!
-!     reference sounding based on dry atmosphere
-!
-      pitop = 1.-.5*dzw(1)*gravity/(cp*tb(1,1)*zz(1,1))
-      do k=2,nz1
-         pitop = pitop-dzu(k)*gravity/(cp*(fzm(k)*tb(k,1)+fzp(k)*tb(k-1,1))   &
-                                         *(fzm(k)*zz(k,1)+fzp(k)*zz(k-1,1)))
-      end do
-      pitop = pitop-.5*dzw(nz1)*gravity/(cp*tb(nz1,1)*zz(nz1,1))
-      ptopb = p0*pitop**(1./rcp)
-
-      do i=1, nCells
-         pb(nz1,i) = pitop+.5*dzw(nz1)*gravity/(cp*tb(nz1,i)*zz(nz1,i))
-         p (nz1,i) = pitop+.5*dzw(nz1)*gravity/(cp*t (nz1,i)*zz(nz1,i))
-         do k=nz1-1,1,-1
-            pb(k,i)  = pb(k+1,i) + dzu(k+1)*gravity/(cp*.5*(tb(k,i)+tb(k+1,i))   &
-                                           *.5*(zz(k,i)+zz(k+1,i)))
-            p (k,i)  = p (k+1,i) + dzu(k+1)*gravity/(cp*.5*(t (k,i)+t (k+1,i))   &
-                                           *.5*(zz(k,i)+zz(k+1,i)))
-         end do
-         do k=1,nz1
-            rb (k,i) = pb(k,i)**(1./rcv)/((rgas/p0)*tb(k,i)*zz(k,i))
-            rtb(k,i) = rb(k,i)*tb(k,i)
-            rr (k,i) = p (k,i)**(1./rcv)/((rgas/p0)*t (k,i)*zz(k,i))-rb(k,i)
-            cqw(k,i) = 1.
-         end do
-      end do
-
-       call mpas_log_write(' ***** base state sounding ***** ')
-       call mpas_log_write('k       pb        p         rb         rtb         rr          tb          t')
-       do k=1,nVertLevels
-          call mpas_log_write('$i $r $r $r $r $r $r $r', intArgs=(/k/), realArgs=(/pb(k,1),p(k,1),rb(k,1),rtb(k,1),rr(k,1),tb(k,1),t(k,1)/))
-       end do
-
-       scalars(index_qv,:,:) = 0.
-
-!-------------------------------------------------------------------
-!     ITERATIONS TO CONVERGE MOIST SOUNDING
-      do itr=1,30
-        pitop = 1.-.5*dzw(1)*gravity*(1.+scalars(index_qv,1,1))/(cp*t(1,1)*zz(1,1))
-
-        do k=2,nz1
-          pitop = pitop-dzu(k)*gravity/(cp*cqw(k,1)*(fzm(k)*t (k,1)+fzp(k)*t (k-1,1)) &
-                                                   *(fzm(k)*zz(k,1)+fzp(k)*zz(k-1,1)))
-        end do
-        pitop = pitop - .5*dzw(nz1)*gravity*(1.+scalars(index_qv,nz1,1))/(cp*t(nz1,1)*zz(nz1,1))
-        ptop = p0*pitop**(1./rcp)
-
-        do i = 1, nCells
-
-           pp(nz1,i) = ptop-ptopb+.5*dzw(nz1)*gravity*   &
-                       (rr(nz1,i)+(rr(nz1,i)+rb(nz1,i))*scalars(index_qv,nz1,i))
-           do k=nz1-1,1,-1
-              pp(k,i) = pp(k+1,i)+dzu(k+1)*gravity*                   &
-                            (fzm(k)*(rr(k  ,i)+(rr(k  ,i)+rb(k  ,i))*scalars(index_qv,k  ,i))  &
-                            +fzp(k)*(rr(k+1,i)+(rr(k+1,i)+rb(k+1,i))*scalars(index_qv,k+1,i)))
-           end do
-           do k=1,nz1
-              rt(k,i) = (pp(k,i)/(rgas*zz(k,i))                   &
-                      -rtb(k,i)*(p(k,i)-pb(k,i)))/p(k,i)
-              p (k,i) = (zz(k,i)*(rgas/p0)*(rtb(k,i)+rt(k,i)))**rcv
-              rr(k,i) = (rt(k,i)-rb(k,i)*(t(k,i)-tb(k,i)))/t(k,i)
-           end do
-!
-!     update water vapor mixing ratio from humitidty profile
-!
-           do k=1,nz1
-              temp   = p(k,i)*t(k,i)
-              pres   = p0*p(k,i)**(1./rcp)
-              qvs    = 380.*exp(17.27*(temp-273.)/(temp-36.))/pres
-              scalars(index_qv,k,i) = min(0.014_RKIND,relhum(k,i)*qvs)
-           end do
-
-           do k=1,nz1
-              t (k,i) = t(k,i)*(1.+1.61*scalars(index_qv,k,i))
-           end do
-           do k=2,nz1
-              cqw(k,i) = 1./(1.+.5*( scalars(index_qv,k-1,i)  &
-                                    +scalars(index_qv,k  ,i)))
-           end do
-
-        end do ! loop over cells
-
-      end do !  iteration loop
-!----------------------------------------------------------------------
-!
-      call mpas_log_write(' *** sounding for the simulation ***')
-      call mpas_log_write('    z       theta       pres         qv       rho_m        u        rr')
-      do k=1,nz1
-         call mpas_log_write('$r $r $r $r $r $r $r', realArgs=(/.5*(zgrid(k,1)+zgrid(k+1,1))/1000.,   &
-                       t(k,1)/(1.+1.61*scalars(index_qv,k,1)),        &
-                       .01*p0*p(k,1)**(1./rcp),                       &
-                       1000.*scalars(index_qv,k,1),                   &
-                       (rb(k,1)+rr(k,1))*(1.+scalars(index_qv,k,1)),  &
-                       u_init(k), rr(k,1)/))
-      end do
-
-      do i=1,ncells
-         do k=1,nz1
-            rho_zz(k,i) = rb(k,i)+rr(k,i)
-         end do
-
-        do k=1,nz1
-            t_init(k,i) = t(k,i)
-        end do
-      end do
-
-      do i=1,nEdges
-        cell1 = cellsOnEdge(1,i)
-        cell2 = cellsOnEdge(2,i)
-        if(cell1 <= nCellsSolve .or. cell2 <= nCellsSolve) then
-          do k=1,nz1
-            ru (k,i)  = 0.5*(rho_zz(k,cell1)+rho_zz(k,cell2))*u(k,i)
-          end do
-        end if
-      end do
-
-!
-!     pre-calculation z-metric terms in omega eqn.
-!
-      do iEdge = 1,nEdges
-         cell1 = cellsOnEdge(1,iEdge)
-         cell2 = cellsOnEdge(2,iEdge)
-         if (cell1 <= nCellsSolve .or. cell2 <= nCellsSolve ) then
-
-            do k = 1, nVertLevels
-
-               if (config_theta_adv_order == 2) then
-
-                  z_edge = (zgrid(k,cell1)+zgrid(k,cell2))/2.
-
-               else !theta_adv_order == 3 or 4
-
-                  d2fdx2_cell1 = deriv_two(1,1,iEdge) * zgrid(k,cell1)
-                  d2fdx2_cell2 = deriv_two(1,2,iEdge) * zgrid(k,cell2)
-                  do i=1, nEdgesOnCell(cell1)
-                     if ( cellsOnCell(i,cell1) > 0)       &
-                     d2fdx2_cell1 = d2fdx2_cell1 + deriv_two(i+1,1,iEdge) * zgrid(k,cellsOnCell(i,cell1))
-                  end do
-                  do i=1, nEdgesOnCell(cell2)
-                     if ( cellsOnCell(i,cell2) > 0)       &
-                     d2fdx2_cell2 = d2fdx2_cell2 + deriv_two(i+1,2,iEdge) * zgrid(k,cellsOnCell(i,cell2))
-                  end do
-
-                  z_edge =  0.5*(zgrid(k,cell1) + zgrid(k,cell2))         &
-                                - (dcEdge(iEdge) **2) * (d2fdx2_cell1 + d2fdx2_cell2) / 12.
-
-                  if (config_theta_adv_order == 3) then
-                     z_edge3 =  - (dcEdge(iEdge) **2) * (d2fdx2_cell1 - d2fdx2_cell2) / 12.
-                  else
-                     z_edge3 = 0.
-                  end if
-
-               end if
-
-                  zb(k,1,iEdge) = (z_edge-zgrid(k,cell1))*dvEdge(iEdge)/areaCell(cell1)
-                  zb(k,2,iEdge) = (z_edge-zgrid(k,cell2))*dvEdge(iEdge)/areaCell(cell2)
-                  zb3(k,1,iEdge)=  z_edge3*dvEdge(iEdge)/areaCell(cell1)
-                  zb3(k,2,iEdge)=  z_edge3*dvEdge(iEdge)/areaCell(cell2)
-
-            end do
-
-         end if
-       end do
-
-!     for including terrain
-      w(:,:) = 0.0
-      rw(:,:) = 0.0
-
-!
-!     calculation of omega, rw = zx * ru + zz * rw
+! compressional Rossby wave initialization
 !
 
-      do iEdge = 1,nEdges
-
-         cell1 = cellsOnEdge(1,iEdge)
-         cell2 = cellsOnEdge(2,iEdge)
-
-         if (cell1 <= nCellsSolve .or. cell2 <= nCellsSolve ) then
-         do k = 2, nVertLevels
-            flux =  (fzm(k)*ru(k,iEdge)+fzp(k)*ru(k-1,iEdge))
-            rw(k,cell2) = rw(k,cell2) + (fzm(k)*zz(k,cell2)+fzp(k)*zz(k-1,cell2))*zb(k,2,iEdge)*flux
-            rw(k,cell1) = rw(k,cell1) - (fzm(k)*zz(k,cell1)+fzp(k)*zz(k-1,cell1))*zb(k,1,iEdge)*flux
-
-            if (config_theta_adv_order ==3) then
-               rw(k,cell2) = rw(k,cell2)    &
-                                            - sign(1.0_RKIND,ru(k,iEdge))*config_coef_3rd_order* &
-                                              (fzm(k)*zz(k,cell2)+fzp(k)*zz(k-1,cell2))*zb3(k,2,iEdge)*flux
-               rw(k,cell1) = rw(k,cell1)    &
-                                            + sign(1.0_RKIND,ru(k,iEdge))*config_coef_3rd_order* &
-                                              (fzm(k)*zz(k,cell1)+fzp(k)*zz(k-1,cell1))*zb3(k,1,iEdge)*flux
-            end if
-
-         end do
-         end if
-
-      end do
-
-      ! Compute w from rho_zz and rw
-      do iCell=1,nCells
-         do k=2,nVertLevels
-            w(k,iCell) = rw(k,iCell) / (fzp(k) * rho_zz(k-1,iCell) + fzm(k) * rho_zz(k,iCell))
-         end do
-      end do
-
-
-      do iEdge=1,nEdges
-         fEdge(iEdge) = 0.
-      end do
-
-      do iVtx=1,nVertices
-         fVertex(iVtx) = 0.
-      end do
-
-      !
-      ! Compute mass fluxes tangential to each edge (i.e., through the faces of dual grid cells)
-      !
-      v(:,:) = 0.0
-      do iEdge = 1, nEdges
-         do i=1,nEdgesOnEdge(iEdge)
-            eoe = edgesOnEdge(i,iEdge)
-            if (eoe > 0) then
-               do k = 1, nVertLevels
-                 v(k,iEdge) = v(k,iEdge) + weightsOnEdge(i,iEdge) * u(k, eoe)
-              end do
-            end if
-         end do
-      end do
-
-!      do k=1,nVertLevels
-!        call mpas_log_write(' k,u_init, t_init = $i $r $r $r', intArgs=(/k/), realArgs=(/u_init(k),t_init(k,1)/))
-!      end do
-
-      ! Compute rho and theta from rho_zz and theta_m
-      do iCell=1,nCells
-         do k=1,nVertLevels
-            rho(k,iCell) = rho_zz(k,iCell) * zz(k,iCell)
-            theta(k,iCell) = t(k,iCell) / (1.0 + 1.61 * scalars(index_qv,k,iCell))
-         end do
-      end do
+! To-do list starts
+      cqw(:,:)=0.
+      ppb(:,:)=0.
+      pb(:,:)=0.
+      rho_zz(:,:)=0.
+      rb(:,:)=0.
+      rr(:,:)=0.
+      tb(:,:)=0.
+      rtb(:,:)=0.
+      p(:,:)=0.
+      pp(:,:)=0.
+      t(:,:)=0.
+      rt(:,:)=0.
+      u(:,:)=0.
+      ru(:,:)=0.
+      zb(:,:,:)=0.
+      zb3(:,:,:)=0.
+      t_init(:,:)=0.
+      w(:,:)=0.
+      rw(:,:)=0.
+      v(:,:)=0.
+      rho(:,:)=0.
+      theta(:,:)=0.
+      u_init(:)=0.
+      v_init(:)=0.
+      fEdge(:)=0.
+      fVertex(:)=0.
+! To-do list ends
 
    end subroutine init_atm_case_compressional_Rossby_wave
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
    subroutine init_atm_case_gfs(block, mesh, nCells, nEdges, nVertLevels, fg, state, diag, diag_physics, init_case, dims, configs)
    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

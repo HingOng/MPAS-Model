@@ -2377,6 +2377,8 @@ module atm_time_integration
 
       integer, pointer :: nEdges, nCellsSolve
 
+      logical, pointer :: config_weak_temperature_gradient
+
       call mpas_pool_get_array(mesh, 'cellsOnEdge', cellsOnEdge)
       call mpas_pool_get_array(mesh, 'edgesOnCell', edgesOnCell)
       call mpas_pool_get_array(mesh, 'nEdgesOnCell', nEdgesOnCell)
@@ -2446,6 +2448,7 @@ module atm_time_integration
 
       ! epssm is the offcentering coefficient for the vertically implicit integration.
       call mpas_pool_get_config(configs, 'config_epssm', epssm) 
+      call mpas_pool_get_config(configs, 'config_weak_temperature_gradient', config_weak_temperature_gradient)
 
       call atm_advance_acoustic_step_work(nCells, nEdges, nCellsSolve, cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                                    cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd, &
@@ -2454,6 +2457,7 @@ module atm_time_integration
                                    tend_rw, zgrid, cofwr, cofwz, w, ru, ru_save, rw, rw_save, fzm, fzp, rdzw, dcEdge, invDcEdge, &
                                    invAreaCell, cofrz, dvEdge, nEdgesOnCell, cellsOnEdge, edgesOnCell, edgesOnCell_sign, &
                                    dts, small_step, epssm, cf1, cf2, cf3, &
+                                   config_weak_temperature_gradient, &
                                    rTildeCell, rTildeEdge, & ! deep
                                    specZoneMaskEdge, specZoneMaskCell &
                                    )
@@ -2468,6 +2472,7 @@ module atm_time_integration
                                    tend_rw, zgrid, cofwr, cofwz, w, ru, ru_save, rw, rw_save, fzm, fzp, rdzw, dcEdge, invDcEdge, &
                                    invAreaCell, cofrz, dvEdge, nEdgesOnCell, cellsOnEdge, edgesOnCell, edgesOnCell_sign, &
                                    dts, small_step, epssm, cf1, cf2, cf3, &
+                                   config_weak_temperature_gradient, &
                                    rTildeCell, rTildeEdge, & ! deep
                                    specZoneMaskEdge, specZoneMaskCell &
                                    )
@@ -2543,6 +2548,8 @@ module atm_time_integration
       integer, intent(in) :: small_step
       real (kind=RKIND), intent(in) :: dts, epssm,cf1, cf2, cf3
       real (kind=RKIND), dimension(nVertLevels) :: ts, rs
+
+      logical :: config_weak_temperature_gradient
 
   
       !
@@ -2743,6 +2750,10 @@ module atm_time_integration
                wwAvg(k,iCell) = wwAvg(k,iCell) + 0.5*(1.0+epssm)*rw_p(k,iCell)
             end do
 
+         end if
+
+         if (config_weak_temperature_gradient) then
+            rtheta_pp(1:nVertLevels,iCell) = 0.0
          end if
 
       end do !  end of loop over cells

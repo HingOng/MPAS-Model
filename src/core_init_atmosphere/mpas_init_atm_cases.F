@@ -2604,12 +2604,18 @@ module init_atm_cases
       integer, intent(in) :: init_case
 
       real (kind=RKIND), parameter :: t0=311. ! density scale height = 9.1 km
+      real (kind=RKIND) :: rH ! inverse density scale height
+      real (kind=RKIND) :: omega_wave, k_wave, m_wave, u0, w0, phi0, phsh_phi, phsh_u ! phsh denotes phase shift
+      real (kind=RKIND) :: u_wave, phi_wave
 
       real (kind=RKIND), dimension(:), pointer :: rdzw, dzu, rdzu, fzm, fzp
       real (kind=RKIND), dimension(:,:), pointer :: zgrid, zxu, zz, hx, cqw
+      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell, rTildeEdge, rTildeVertex
       real (kind=RKIND), dimension(:,:), pointer :: ppb, pb, rho_zz, rb, rr, tb, rtb, p, pp, dss, t, rt, u, ru
       real (kind=RKIND), dimension(:,:,:), pointer :: scalars, deriv_two, zb, zb3
 
+      !This is temporary variable here. It just need when calculate tangential velocity v.
+      integer :: eoe, j
       integer, dimension(:), pointer :: nEdgesOnEdge, nEdgesOnCell
       integer, dimension(:,:), pointer :: edgesOnEdge, cellsOnEdge, cellsOnCell
       real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge
@@ -2618,7 +2624,7 @@ module init_atm_cases
       integer, pointer :: nEdges, maxEdges, nCellsSolve, nVertices
       integer, pointer :: index_qv
 
-      real (kind=RKIND) :: p0
+      real (kind=RKIND) :: p0, d2fdx2_cell1, d2fdx2_cell2
       real (kind=RKIND) :: ztemp, zd, zt, dz, str
       real (kind=RKIND) :: xnutr
 
@@ -2628,6 +2634,8 @@ module init_atm_cases
       real (kind=RKIND) :: d1, d2, d3, cof1, cof2
       real (kind=RKIND) :: rcp, rcv
       real (kind=RKIND) :: temp, pres, a_scale
+
+      real (kind=RKIND) :: z_edge, z_edge3
 
       real (kind=RKIND), dimension(:), pointer :: xCell, yCell, zCell
       real (kind=RKIND), dimension(:), pointer :: xEdge, yEdge, zEdge
@@ -2720,6 +2728,9 @@ module init_atm_cases
       call mpas_pool_get_array(mesh, 'zz', zz)
       call mpas_pool_get_array(mesh, 'hx', hx)
       call mpas_pool_get_array(mesh, 'dss', dss)
+      call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
+      call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
+      call mpas_pool_get_array(mesh, 'rTildeVertex', rTildeVertex)
 
       call mpas_pool_get_array(mesh, 'cf1', cf1)
       call mpas_pool_get_array(mesh, 'cf2', cf2)
@@ -2755,7 +2766,7 @@ module init_atm_cases
       call atm_initialize_deformation_weights(mesh, nCells, on_a_sphere, sphere_radius)
 
       xnutr = 0. ! no w damping
-      zd = 12500. ! useless
+      zd = 12500.
 
       p0 = 1.e+05
       rcp = rgas/cp
@@ -2766,6 +2777,19 @@ module init_atm_cases
       zt = 12500.
       dz = zt/float(nz1)
 !      call mpas_log_write(' dz = $r', realArgs=(/dz/))
+
+      ! wave parameters
+      rH         = gravity/(rgas*t0)
+      k_wave     = 2.*pii/(2.e5*a_scale) ! 2.e5 is the width of the domain in meters.
+      m_wave     = pii/zt
+      omega_wave = 2.*omega*k_wave*rH/( k_wave**2 +m_wave**2 +0.25* rH**2 ) ! dispersion relation
+      u0         = 0.72
+      phi0       = u0*(4.* omega**2 - omega_wave**2 )* &
+                   (  omega**2 * rH**2 +4.* omega**2 * m_wave**2 &
+                     -2.*omega*omega_wave*k_wave*rH+ omega_wave**2 * k_wave**2  )**(-0.5) ! polarization relation
+      w0         = phi0*k_wave* (4.* omega**2 - omega_wave**2 )**(-0.5)
+      phsh_phi   = atan((0.5*omega_wave*rH-2.*omega*k_wave)/(m_wave*omega_wave))
+      phsh_u     = phsh_phi + atan(2.*omega*m_wave/(omega*rH-omega_wave*k_wave))
 
       do k=1,nz
 
@@ -2854,40 +2878,134 @@ module init_atm_cases
         end do
       end do
 
+      rTildeCell(:,:) = 1.0_RKIND
+      rTildeEdge(:,:) = 1.0_RKIND
+      rTildeVertex(:,:) = 1.0_RKIND
+
       call mpas_log_write(' grid metrics setup complete ')
 
 !
 ! compressional Rossby wave initialization
 !
+!     reference sounding based on dry isothermal atmosphere
+!
+      do i=1, nCells
+        do k=1,nz1
+          ztemp    = .5*(zgrid(k+1,i)+zgrid(k,i))
+          ppb(k,i) = p0*exp(-ztemp*rH)
+          pb (k,i) = (ppb(k,i)/p0)**(rcp)
+          rb (k,i) = ppb(k,i)*rTildeCell(k,i)**2/(rgas*t0*zz(k,i))
+          tb (k,i) = t0/pb(k,i)
+          rtb(k,i) = rb(k,i)*tb(k,i)
+          t  (k,i) = tb(k,i)
+          t_init(k,i) = tb(k,i)
+          theta(k,i)  = tb(k,i)
+        end do
+      end do
 
-! To-do list starts
-      cqw(:,:)=0.
-      ppb(:,:)=0.
-      pb(:,:)=0.
-      rho_zz(:,:)=0.
-      rb(:,:)=0.
-      rr(:,:)=0.
-      tb(:,:)=0.
-      rtb(:,:)=0.
-      p(:,:)=0.
-      pp(:,:)=0.
-      t(:,:)=0.
-      rt(:,:)=0.
-      u(:,:)=0.
-      ru(:,:)=0.
-      zb(:,:,:)=0.
-      zb3(:,:,:)=0.
-      t_init(:,:)=0.
-      w(:,:)=0.
-      rw(:,:)=0.
-      v(:,:)=0.
-      rho(:,:)=0.
-      theta(:,:)=0.
+!
+!     compressional Rossby wave perturbation
+!
+
+      do i=1, nCells
+        do k=1,nz1
+          ztemp       = .5*(zgrid(k+1,i)+zgrid(k,i))
+          phi_wave    = phi0 * exp(0.5*ztemp*rH) * cos(m_wave*ztemp+phsh_phi) * cos(k_wave*xCell(i    ))
+          p     (k,i) = pb(k,i) + phi_wave/(cp*tb(k,i))
+          pp    (k,i) = p0* p(k,i)**(cp/rgas) - ppb(k,i)
+          rho   (k,i) = (ppb(k,i)+pp(k,i))/(rgas*t0)
+          rho_zz(k,i) = rho(k,i)*rTildeCell(k,i)**2/zz(k,i)
+          rr    (k,i) = rho_zz(k,i) - rb(k,i)
+          rt    (k,i) = rho_zz(k,i)*t(k,i) - rtb(k,i)
+        end do
+
+        do k=1,nz
+          ztemp       = zgrid(k,i)
+          w     (k,i) = w0   * exp(0.5*ztemp*rH) * sin(m_wave*ztemp         ) * sin(k_wave*xCell(i    ))
+          rw    (k,i) = w(k,i)*(fzp(k)*rho_zz(k-1,i)+fzm(k)*rho_zz(k,i))
+        end do
+      end do
+
+      do iEdge=1, nEdges
+        iCell1 = cellsOnEdge(1,iEdge)
+        iCell2 = cellsOnEdge(2,iEdge)
+        do k=1,nz1
+          ztemp       = .25*(zgrid(k+1,iCell1)+zgrid(k+1,iCell2)+zgrid(k,iCell1)+zgrid(k,iCell2))
+          u_wave      = u0   * exp(0.5*ztemp*rH) * cos(m_wave*ztemp+phsh_u  ) * cos(k_wave*xEdge(iEdge))
+          u (k,iEdge) = u_wave*cos(angleEdge(iEdge))
+          ru(k,iEdge) = u(k,iEdge)*rTildeEdge(k,iEdge)*0.5*(rho_zz(k,iCell1)/rTildeCell(k,iCell1)**2 &
+                                                           +rho_zz(k,iCell2)/rTildeCell(k,iCell2)**2) 
+        end do
+      end do
+
+      !
+      ! Compute mass fluxes tangential to each edge (i.e., through the faces of dual grid cells)
+      !
+      v(:,:) = 0.0
+      do iEdge = 1, nEdges
+         do i=1,nEdgesOnEdge(iEdge)
+            eoe = edgesOnEdge(i,iEdge)
+            if (eoe > 0) then
+               do k = 1, nVertLevels
+                 v(k,iEdge) = v(k,iEdge) + weightsOnEdge(i,iEdge) * u(k, eoe)
+              end do
+            end if
+         end do
+      end do
+
+!
+!     pre-calculation z-metric terms in omega eqn.
+!
+      do iEdge = 1,nEdges
+         iCell1 = cellsOnEdge(1,iEdge)
+         iCell2 = cellsOnEdge(2,iEdge)
+         if (iCell1 <= nCellsSolve .or. iCell2 <= nCellsSolve ) then
+
+            do k = 1, nVertLevels
+
+               if (config_theta_adv_order == 2) then
+
+                  z_edge = (zgrid(k,iCell1)+zgrid(k,iCell2))/2.
+
+               else !theta_adv_order == 3 or 4
+
+                  d2fdx2_cell1 = deriv_two(1,1,iEdge) * zgrid(k,iCell1)
+                  d2fdx2_cell2 = deriv_two(1,2,iEdge) * zgrid(k,iCell2)
+                  do i=1, nEdgesOnCell(iCell1)
+                     if ( cellsOnCell(i,iCell1) > 0)       &
+                     d2fdx2_cell1 = d2fdx2_cell1 + deriv_two(i+1,1,iEdge) * zgrid(k,cellsOnCell(i,iCell1))
+                  end do
+                  do i=1, nEdgesOnCell(iCell2)
+                     if ( cellsOnCell(i,iCell2) > 0)       &
+                     d2fdx2_cell2 = d2fdx2_cell2 + deriv_two(i+1,2,iEdge) * zgrid(k,cellsOnCell(i,iCell2))
+                  end do
+
+                  z_edge =  0.5*(zgrid(k,iCell1) + zgrid(k,iCell2))         &
+                                - (dcEdge(iEdge) **2) * (d2fdx2_cell1 + d2fdx2_cell2) / 12.
+
+                  if (config_theta_adv_order == 3) then
+                     z_edge3 =  - (dcEdge(iEdge) **2) * (d2fdx2_cell1 - d2fdx2_cell2) / 12.
+                  else
+                     z_edge3 = 0.
+                  end if
+
+               end if
+
+                  zb(k,1,iEdge) = (z_edge-zgrid(k,iCell1))*dvEdge(iEdge)/areaCell(iCell1)
+                  zb(k,2,iEdge) = (z_edge-zgrid(k,iCell2))*dvEdge(iEdge)/areaCell(iCell2)
+                  zb3(k,1,iEdge)=  z_edge3*dvEdge(iEdge)/areaCell(iCell1)
+                  zb3(k,2,iEdge)=  z_edge3*dvEdge(iEdge)/areaCell(iCell2)
+
+            end do
+
+         end if
+      end do
+
+      cqw(:,:) = 1.0_RKIND
       u_init(:)=0.
       v_init(:)=0.
       fEdge(:)=0.
       fVertex(:)=0.
-! To-do list ends
 
    end subroutine init_atm_case_compressional_Rossby_wave
 

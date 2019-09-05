@@ -2873,8 +2873,6 @@ module atm_time_integration
 
       integer, dimension(:), pointer :: bdyMaskCell  ! MPAS_regional addition
 
-      logical, pointer :: config_weak_temperature_gradient
-
       call mpas_pool_get_array(diag, 'wwAvg', wwAvg)
       call mpas_pool_get_array(diag, 'rw_save', rw_save)
       call mpas_pool_get_array(diag, 'rw', rw)
@@ -2934,7 +2932,6 @@ module atm_time_integration
       call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
       call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
 
-      call mpas_pool_get_config(configs, 'config_weak_temperature_gradient', config_weak_temperature_gradient)
 
       call atm_recover_large_step_variables_work(nCells, nEdges, nCellsSolve, nEdgesSolve, dt, ns, rk_step, &
                              wwAvg, rw_save, w, rw, rw_p, rtheta_p, rtheta_pp, rtheta_p_save, rt_diabatic_tend, rho_p, &
@@ -2943,7 +2940,6 @@ module atm_time_integration
                              zb, zb3, zb_cell, zb3_cell, edgesOnCell_sign, cellsOnEdge, edgesOnCell, nEdgesOnCell, &
                              cf1, cf2, cf3, &
                              rTildeCell, rTildeEdge, & ! deep
-                             config_weak_temperature_gradient, &
                              bdyMaskCell, &  !  addition for regional_MPAS
                              cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                              cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -2958,7 +2954,6 @@ module atm_time_integration
                              zb, zb3, zb_cell, zb3_cell, edgesOnCell_sign, cellsOnEdge, edgesOnCell, nEdgesOnCell, &
                              cf1, cf2, cf3, &
                              rTildeCell, rTildeEdge, & ! deep
-                             config_weak_temperature_gradient, &
                              bdyMaskCell, &  ! addition for regional_MPAS
                              cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                              cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -3023,7 +3018,6 @@ module atm_time_integration
       integer, intent(in) :: cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd
       integer, intent(in) :: cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd
 
-      logical :: config_weak_temperature_gradient
 
       !
       ! Local variables
@@ -3087,12 +3081,6 @@ module atm_time_integration
             do k = 1, nVertLevels
                rtheta_p(k,iCell) = rtheta_p_save(k,iCell) + rtheta_pp(k,iCell)
                theta_m(k,iCell) = (rtheta_p(k,iCell) + rtheta_base(k,iCell))/rho_zz(k,iCell)
-            end do
-         end if
-
-         if (config_weak_temperature_gradient) then
-            do k = 1, nVertLevels
-               theta_m(k,iCell) = theta_m(1,iCell)
             end do
          end if
 
@@ -6090,14 +6078,6 @@ module atm_time_integration
                                              + rho_base(k,iCell)   * (theta_m(k,iCell) - theta_base(k,iCell))
          end do
       end do
-
-      if (config_weak_temperature_gradient) then
-         do iCell=cellStart,cellEnd
-            do k=1,nVertLevels
-               theta_m(k,iCell) = theta_m(1,iCell)
-            end do
-         end do
-      end if
 
       do iCell=cellStart,cellEnd
          do k=1,nVertLevels

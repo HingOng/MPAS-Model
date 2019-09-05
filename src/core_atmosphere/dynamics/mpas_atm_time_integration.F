@@ -5981,6 +5981,7 @@ module atm_time_integration
       real (kind=RKIND), dimension(:), pointer :: fzm, fzp
       real (kind=RKIND), dimension(:,:,:), pointer :: zb, zb3, zb_cell, zb3_cell
 
+      logical, pointer :: config_weak_temperature_gradient
 
       call mpas_pool_get_dimension(mesh, 'nCells', nCells)
       call mpas_pool_get_dimension(mesh, 'nEdges', nEdges)
@@ -6020,6 +6021,8 @@ module atm_time_integration
       ! deep
       call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
       call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
+
+      call mpas_pool_get_config(configs, 'config_weak_temperature_gradient', config_weak_temperature_gradient)
 
       rcv = rgas / (cp-rgas)
       p0 = 1.e5  ! this should come from somewhere else...

@@ -2617,16 +2617,17 @@ module init_atm_cases
       !This is temporary variable here. It just need when calculate tangential velocity v.
       integer :: eoe, j
       integer, dimension(:), pointer :: nEdgesOnEdge, nEdgesOnCell
-      integer, dimension(:,:), pointer :: edgesOnEdge, cellsOnEdge, cellsOnCell
+      integer, dimension(:,:), pointer :: edgesOnEdge, cellsOnEdge, cellsOnCell, verticesOnEdge
       real (kind=RKIND), dimension(:,:), pointer :: weightsOnEdge
 
-      integer :: iCell, iCell1, iCell2 , iEdge, vtx1, vtx2, ivtx, i, k, nz, nz1
+      integer :: iCell, iCell1, iCell2 , iEdge, vtx1, vtx2, ivtx, i, k, nz, nz1, iVertex1, iVertex2
       integer, pointer :: nEdges, maxEdges, nCellsSolve, nVertices
       integer, pointer :: index_qv
 
       real (kind=RKIND) :: p0, d2fdx2_cell1, d2fdx2_cell2
       real (kind=RKIND) :: ztemp, zd, zt, dz, str
       real (kind=RKIND) :: xnutr
+      real (kind=RKIND) :: dxVertex, dyVertex
 
       real (kind=RKIND), dimension(nVertLevels + 1 ) :: zc, zw, ah
       real (kind=RKIND), dimension(nVertLevels ) :: zu, dzw, rdzwp, rdzwm
@@ -2643,6 +2644,7 @@ module init_atm_cases
       real (kind=RKIND), dimension(:), pointer :: dcEdge, dvEdge, areaCell, areaTriangle
       real (kind=RKIND), dimension(:,:), pointer :: kiteAreasOnVertex
       logical, pointer :: on_a_sphere
+      real (kind=RKIND), pointer :: x_period, y_period
       real (kind=RKIND), pointer :: sphere_radius
       real (kind=RKIND), pointer :: config_coef_3rd_order
       integer, pointer :: config_theta_adv_order
@@ -2651,7 +2653,6 @@ module init_atm_cases
 
       real (kind=RKIND), dimension(:,:), pointer :: t_init, w, rw, v, rho, theta
       real (kind=RKIND), dimension(:), pointer :: u_init, v_init, angleEdge, fEdge, fVertex
-
 
       call mpas_pool_get_array(mesh, 'xCell', xCell)
       call mpas_pool_get_array(mesh, 'yCell', yCell)
@@ -2670,6 +2671,8 @@ module init_atm_cases
 
       call mpas_pool_get_config(mesh, 'on_a_sphere', on_a_sphere)
       call mpas_pool_get_config(mesh, 'sphere_radius', sphere_radius)
+      call mpas_pool_get_config(mesh, 'x_period', x_period)
+      call mpas_pool_get_config(mesh, 'y_period', y_period)
 
       call mpas_pool_get_config(configs, 'config_coef_3rd_order', config_coef_3rd_order)
       call mpas_pool_get_config(configs, 'config_theta_adv_order', config_theta_adv_order)
@@ -2680,6 +2683,7 @@ module init_atm_cases
       call mpas_pool_get_array(mesh, 'cellsOnEdge', cellsOnEdge)
       call mpas_pool_get_array(mesh, 'nEdgesOnCell', nEdgesOnCell)
       call mpas_pool_get_array(mesh, 'cellsOnCell', cellsOnCell)
+      call mpas_pool_get_array(mesh, 'verticesOnEdge', verticesOnEdge)
       call mpas_pool_get_array(mesh, 'deriv_two', deriv_two)
       call mpas_pool_get_array(mesh, 't_init', t_init)
       call mpas_pool_get_array(mesh, 'u_init', u_init)
@@ -2691,7 +2695,7 @@ module init_atm_cases
       !
       ! Scale all distances
       !
-      a_scale = 10.0 ! Since xCell ranges from 500 m to 200000 m, this makes the periodic domain width 2000000 m
+      a_scale = 10.0 ! Use 10.0 only because changing x_period or y_period here does not change their value in the output file. TODO: change it.
 
       xCell(:) = xCell(:) * a_scale
       yCell(:) = yCell(:) * a_scale
@@ -2707,7 +2711,8 @@ module init_atm_cases
       areaCell(:) = areaCell(:) * a_scale**2.0
       areaTriangle(:) = areaTriangle(:) * a_scale**2.0
       kiteAreasOnVertex(:,:) = kiteAreasOnVertex(:,:) * a_scale**2.0
-
+      !x_period    = x_period * a_scale
+      !y_period    = y_period * a_scale
 
       call mpas_pool_get_dimension(mesh, 'nEdges', nEdges)
       call mpas_pool_get_dimension(mesh, 'nVertices', nVertices)
@@ -2715,6 +2720,31 @@ module init_atm_cases
       call mpas_pool_get_dimension(mesh, 'maxEdges', maxEdges)
       nz1 = nVertLevels
       nz = nz1 + 1
+
+      !
+      ! Redefine angleEdge
+      !
+      do iEdge=1,nEdges
+        iVertex1 = verticesOnEdge(1,iEdge)
+        iVertex2 = verticesOnEdge(2,iEdge)
+        dxVertex = xVertex(iVertex2) - xVertex(iVertex1)
+        if      (dxVertex.gt.dvEdge(1)) then
+          dxVertex = dxVertex - x_period
+        else if (dxVertex.lt.-dvEdge(1)) then
+          dxVertex = dxVertex + x_period
+        end if
+        dyVertex = yVertex(iVertex2) - yVertex(iVertex1)
+        if      (dyVertex.gt.dvEdge(1)) then
+          dyVertex = dyVertex - y_period
+        else if (dyVertex.lt.-dvEdge(1)) then
+          dyVertex = dyVertex + y_period
+        end if
+        if (dyVertex.eq.0.) then
+          angleEdge(iEdge) = 0.5 * pii * dxVertex / abs(dxVertex)
+        else
+          angleEdge(iEdge) = atan(dxVertex/dyVertex)
+        end if
+      end do
 
       call mpas_pool_get_array(mesh, 'zgrid', zgrid)
       call mpas_pool_get_array(mesh, 'zb', zb)
@@ -2780,7 +2810,7 @@ module init_atm_cases
 
       ! wave parameters
       rH         = gravity/(rgas*t0)
-      k_wave     = 2.*pii/(2.e5*a_scale) ! 2.e5 is the width of the domain in meters.
+      k_wave     = 2.*pii/x_period
       m_wave     = pii/zt
       omega_wave = 2.*omega*k_wave*rH/( k_wave**2 +m_wave**2 +0.25* rH**2 ) ! dispersion relation
       u0         = 0.72

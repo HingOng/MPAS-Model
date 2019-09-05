@@ -2873,6 +2873,8 @@ module atm_time_integration
 
       integer, dimension(:), pointer :: bdyMaskCell  ! MPAS_regional addition
 
+      logical, pointer :: config_weak_temperature_gradient
+
       call mpas_pool_get_array(diag, 'wwAvg', wwAvg)
       call mpas_pool_get_array(diag, 'rw_save', rw_save)
       call mpas_pool_get_array(diag, 'rw', rw)
@@ -2932,6 +2934,7 @@ module atm_time_integration
       call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
       call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
 
+      call mpas_pool_get_config(configs, 'config_weak_temperature_gradient', config_weak_temperature_gradient)
 
       call atm_recover_large_step_variables_work(nCells, nEdges, nCellsSolve, nEdgesSolve, dt, ns, rk_step, &
                              wwAvg, rw_save, w, rw, rw_p, rtheta_p, rtheta_pp, rtheta_p_save, rt_diabatic_tend, rho_p, &
@@ -2940,6 +2943,7 @@ module atm_time_integration
                              zb, zb3, zb_cell, zb3_cell, edgesOnCell_sign, cellsOnEdge, edgesOnCell, nEdgesOnCell, &
                              cf1, cf2, cf3, &
                              rTildeCell, rTildeEdge, & ! deep
+                             config_weak_temperature_gradient, &
                              bdyMaskCell, &  !  addition for regional_MPAS
                              cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                              cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -2954,6 +2958,7 @@ module atm_time_integration
                              zb, zb3, zb_cell, zb3_cell, edgesOnCell_sign, cellsOnEdge, edgesOnCell, nEdgesOnCell, &
                              cf1, cf2, cf3, &
                              rTildeCell, rTildeEdge, & ! deep
+                             config_weak_temperature_gradient, &
                              bdyMaskCell, &  ! addition for regional_MPAS
                              cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                              cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -3018,6 +3023,7 @@ module atm_time_integration
       integer, intent(in) :: cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd
       integer, intent(in) :: cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd
 
+      logical :: config_weak_temperature_gradient
 
       !
       ! Local variables
@@ -3069,8 +3075,16 @@ module atm_time_integration
                rtheta_p(k,iCell) = rtheta_p_save(k,iCell) + rtheta_pp(k,iCell) &
                                  - dt * rho_zz(k,iCell) * rt_diabatic_tend(k,iCell)
                theta_m(k,iCell) = (rtheta_p(k,iCell) + rtheta_base(k,iCell))/rho_zz(k,iCell)
-               ! deep Eq. (23)
-               exner(k,iCell) = (zz(k,iCell)/rTildeCell(k,iCell)**2*(rgas/p0)*(rtheta_p(k,iCell)+rtheta_base(k,iCell)))**rcv
+            end do
+            if (config_weak_temperature_gradient) then
+               exner(1:nVertLevels,iCell) = 1.0_RKIND
+            else
+               do k = 1, nVertLevels
+                  ! deep Eq. (23)
+                  exner(k,iCell) = (zz(k,iCell)/rTildeCell(k,iCell)**2*(rgas/p0)*(rtheta_p(k,iCell)+rtheta_base(k,iCell)))**rcv
+               end do
+            end if
+            do k = 1, nVertLevels
                ! pressure_p is perturbation pressure
                ! deep Eq. (23)
                pressure_p(k,iCell) = zz(k,iCell) / rTildeCell(k,iCell)**2 * rgas &
@@ -5969,6 +5983,7 @@ module atm_time_integration
       real (kind=RKIND), dimension(:), pointer :: fzm, fzp
       real (kind=RKIND), dimension(:,:,:), pointer :: zb, zb3, zb_cell, zb3_cell
 
+      logical, pointer :: config_weak_temperature_gradient
 
       call mpas_pool_get_dimension(mesh, 'nCells', nCells)
       call mpas_pool_get_dimension(mesh, 'nEdges', nEdges)
@@ -6008,6 +6023,8 @@ module atm_time_integration
       ! deep
       call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
       call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
+
+      call mpas_pool_get_config(configs, 'config_weak_temperature_gradient', config_weak_temperature_gradient)
 
       rcv = rgas / (cp-rgas)
       p0 = 1.e5  ! this should come from somewhere else...
@@ -6079,14 +6096,19 @@ module atm_time_integration
          end do
       end do
 
-      do iCell=cellStart,cellEnd
-         do k=1,nVertLevels
-            ! deep Eq. (23)
-            exner(k,iCell) = (zz(k,iCell) / rTildeCell(k,iCell)**2 * (rgas/p0) * (rtheta_p(k,iCell) + rtheta_base(k,iCell)))**rcv
-            ! deep Eq. (23)
-            exner_base(k,iCell) = (zz(k,iCell) / rTildeCell(k,iCell)**2 * (rgas/p0) * (rtheta_base(k,iCell)))**rcv  ! WCS addition 20180403
+      if (config_weak_temperature_gradient) then
+         exner(:,:)      = 1.0_RKIND
+         exner_base(:,:) = 1.0_RKIND
+      else
+         do iCell=cellStart,cellEnd
+            do k=1,nVertLevels
+               ! deep Eq. (23)
+               exner(k,iCell) = (zz(k,iCell) / rTildeCell(k,iCell)**2 * (rgas/p0) * (rtheta_p(k,iCell) + rtheta_base(k,iCell)))**rcv
+               ! deep Eq. (23)
+               exner_base(k,iCell) = (zz(k,iCell) / rTildeCell(k,iCell)**2 * (rgas/p0) * (rtheta_base(k,iCell)))**rcv  ! WCS addition 20180403
+            end do
          end do
-      end do
+      end if
 
       do iCell=cellStart,cellEnd
          do k=1,nVertLevels

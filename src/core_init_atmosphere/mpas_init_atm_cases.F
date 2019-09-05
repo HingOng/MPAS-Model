@@ -2923,7 +2923,7 @@ module init_atm_cases
         do k=1,nz1
           ztemp    = .5*(zgrid(k+1,i)+zgrid(k,i))
           ppb(k,i) = p0*exp(-ztemp*rH)
-          pb (k,i) = (ppb(k,i)/p0)**(rcp)
+          pb (k,i) = 1.0_RKIND ! (ppb(k,i)/p0)**(rcp) ! weak temperature gradient trick
           rb (k,i) = ppb(k,i)*rTildeCell(k,i)**2/(rgas*t0*zz(k,i))
           tb (k,i) = t0/pb(k,i)
           rtb(k,i) = rb(k,i)*tb(k,i)
@@ -2941,8 +2941,8 @@ module init_atm_cases
         do k=1,nz1
           ztemp       = .5*(zgrid(k+1,i)+zgrid(k,i))
           phi_wave    = phi0 * exp(0.5*ztemp*rH) * cos(m_wave*ztemp+phsh_phi) * cos(k_wave*xCell(i    ))
-          p     (k,i) = pb(k,i) + phi_wave/(cp*tb(k,i))
-          pp    (k,i) = p0* p(k,i)**(cp/rgas) - ppb(k,i)
+          p     (k,i) = 1.0_RKIND ! pb(k,i) + phi_wave/(cp*tb(k,i)) ! weak temperature gradient trick
+          pp    (k,i) = phi_wave*ppb(k,i)/(rgas*t0) ! p0* p(k,i)**(cp/rgas) - ppb(k,i) ! weak temperature gradient trick
           rho   (k,i) = (ppb(k,i)+pp(k,i))/(rgas*t0)
           rho_zz(k,i) = rho(k,i)*rTildeCell(k,i)**2/zz(k,i)
           rr    (k,i) = rho_zz(k,i) - rb(k,i)

@@ -2716,6 +2716,13 @@ module init_atm_cases
       nz1 = nVertLevels
       nz = nz1 + 1
 
+      !
+      ! Redefine angleEdge
+      !
+      do iEdge=1,nEdges
+        angleEdge(iEdge) = - (angleEdge(iEdge) + 0.5*pii)
+      end do
+
       call mpas_pool_get_array(mesh, 'zgrid', zgrid)
       call mpas_pool_get_array(mesh, 'zb', zb)
       call mpas_pool_get_array(mesh, 'zb3', zb3)

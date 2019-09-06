@@ -881,6 +881,9 @@ contains
       dist = pxi - xci
 
       if (abs(dist) > xiRef * 0.5_RKIND) then
+        ! TODO: For periodic boundaries, locate the outer cell using the mirror image of inner cell about the edge.
+        !       The current algorithm for locating the outer cell introduces large truncation error
+        !       because x_period or y_period are much larger than dcEdge.
         mpas_fix_periodicity = pxi - (dist/abs(dist)) * xiRef
       else
         mpas_fix_periodicity = pxi

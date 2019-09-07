@@ -251,7 +251,7 @@
 
 		<nml_option name="config_weak_temperature_gradient" type="logical" default_value="false" in_defaults="true"
 		     units="-"
-		     description="To set theta_m to a constant for tropical benchmarking tests"
+		     description="To use barotropic fluid for tropical benchmarking tests"
 		     possible_values=".true. or .false."/>
 											       
         </nml_record>

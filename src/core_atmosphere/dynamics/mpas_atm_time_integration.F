@@ -1968,8 +1968,10 @@ module atm_time_integration
 
       integer, pointer :: nCells, moist_start, moist_end
 
+      logical, pointer :: config_weak_temperature_gradient
 
       call mpas_pool_get_config(configs, 'config_epssm', epssm)
+      call mpas_pool_get_config(configs, 'config_weak_temperature_gradient', config_weak_temperature_gradient)
 
       call mpas_pool_get_array(mesh, 'rdzu', rdzu)
       call mpas_pool_get_array(mesh, 'rdzw', rdzw)
@@ -2006,6 +2008,7 @@ module atm_time_integration
       call atm_compute_vert_imp_coefs_work(nCells, moist_start, moist_end, dts, epssm, &
                                    zz, cqw, p, t, rb, rtb, pb, rt, cofwr, cofwz, coftz, cofwt, &
                                    rTildeCell, & ! deep
+                                   config_weak_temperature_gradient, &
                                    a_tri, alpha_tri, gamma_tri, cofrz, rdzw, fzm, fzp, rdzu, scalars, &
                                    cellStart, cellEnd, edgeStart, edgeEnd, &
                                    cellSolveStart, cellSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -2017,6 +2020,7 @@ module atm_time_integration
    subroutine atm_compute_vert_imp_coefs_work(nCells, moist_start, moist_end, dts, epssm, &
                                    zz, cqw, p, t, rb, rtb, pb, rt, cofwr, cofwz, coftz, cofwt, &
                                    rTildeCell, & ! deep
+                                   config_weak_temperature_gradient, &
                                    a_tri, alpha_tri, gamma_tri, cofrz, rdzw, fzm, fzp, rdzu, scalars, &
                                    cellStart, cellEnd, edgeStart, edgeEnd, &
                                    cellSolveStart, cellSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -2060,6 +2064,7 @@ module atm_time_integration
       integer, intent(in) :: cellStart, cellEnd, edgeStart, edgeEnd
       integer, intent(in) :: cellSolveStart, cellSolveEnd, edgeSolveStart, edgeSolveEnd
 
+      logical :: config_weak_temperature_gradient
 
       !
       ! Local variables
@@ -2071,8 +2076,13 @@ module atm_time_integration
 
       !  set coefficients
       dtseps = .5*dts*(1.+epssm)
-      rcv = rgas/(cp-rgas)
-      c2 = cp*rcv
+      if (config_weak_temperature_gradient) then
+         rcv = 0.0_RKIND
+         c2 = rgas
+      else
+         rcv = rgas/(cp-rgas)
+         c2 = cp*rcv
+      end if
 
 ! MGD bad to have all threads setting this variable?
       do k=1,nVertLevels
@@ -2377,6 +2387,8 @@ module atm_time_integration
 
       integer, pointer :: nEdges, nCellsSolve
 
+      logical, pointer :: config_weak_temperature_gradient
+
       call mpas_pool_get_array(mesh, 'cellsOnEdge', cellsOnEdge)
       call mpas_pool_get_array(mesh, 'edgesOnCell', edgesOnCell)
       call mpas_pool_get_array(mesh, 'nEdgesOnCell', nEdgesOnCell)
@@ -2446,6 +2458,7 @@ module atm_time_integration
 
       ! epssm is the offcentering coefficient for the vertically implicit integration.
       call mpas_pool_get_config(configs, 'config_epssm', epssm) 
+      call mpas_pool_get_config(configs, 'config_weak_temperature_gradient', config_weak_temperature_gradient)
 
       call atm_advance_acoustic_step_work(nCells, nEdges, nCellsSolve, cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                                    cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd, &
@@ -2455,6 +2468,7 @@ module atm_time_integration
                                    invAreaCell, cofrz, dvEdge, nEdgesOnCell, cellsOnEdge, edgesOnCell, edgesOnCell_sign, &
                                    dts, small_step, epssm, cf1, cf2, cf3, &
                                    rTildeCell, rTildeEdge, & ! deep
+                                   config_weak_temperature_gradient, &
                                    specZoneMaskEdge, specZoneMaskCell &
                                    )
 
@@ -2469,6 +2483,7 @@ module atm_time_integration
                                    invAreaCell, cofrz, dvEdge, nEdgesOnCell, cellsOnEdge, edgesOnCell, edgesOnCell_sign, &
                                    dts, small_step, epssm, cf1, cf2, cf3, &
                                    rTildeCell, rTildeEdge, & ! deep
+                                   config_weak_temperature_gradient, &
                                    specZoneMaskEdge, specZoneMaskCell &
                                    )
 
@@ -2544,6 +2559,7 @@ module atm_time_integration
       real (kind=RKIND), intent(in) :: dts, epssm,cf1, cf2, cf3
       real (kind=RKIND), dimension(nVertLevels) :: ts, rs
 
+      logical :: config_weak_temperature_gradient
   
       !
       ! Local variables
@@ -2552,9 +2568,13 @@ module atm_time_integration
       real (kind=RKIND) :: c2, rcv, rtheta_pp_tmp
       real (kind=RKIND) :: pgrad, flux, resm, rdts
 
-
-      rcv = rgas / (cp - rgas)
-      c2 = cp * rcv
+      if (config_weak_temperature_gradient) then
+         rcv = 0.0_RKIND
+         c2 = rgas
+      else
+         rcv = rgas / (cp - rgas)
+         c2 = cp * rcv
+      end if
       resm = (1.0 - epssm) / (1.0 + epssm)
       rdts = 1./dts
 
@@ -2873,6 +2893,8 @@ module atm_time_integration
 
       integer, dimension(:), pointer :: bdyMaskCell  ! MPAS_regional addition
 
+      logical, pointer :: config_weak_temperature_gradient
+      
       call mpas_pool_get_array(diag, 'wwAvg', wwAvg)
       call mpas_pool_get_array(diag, 'rw_save', rw_save)
       call mpas_pool_get_array(diag, 'rw', rw)
@@ -2932,6 +2954,7 @@ module atm_time_integration
       call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
       call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
 
+      call mpas_pool_get_config(configs, 'config_weak_temperature_gradient', config_weak_temperature_gradient)
 
       call atm_recover_large_step_variables_work(nCells, nEdges, nCellsSolve, nEdgesSolve, dt, ns, rk_step, &
                              wwAvg, rw_save, w, rw, rw_p, rtheta_p, rtheta_pp, rtheta_p_save, rt_diabatic_tend, rho_p, &
@@ -2940,6 +2963,7 @@ module atm_time_integration
                              zb, zb3, zb_cell, zb3_cell, edgesOnCell_sign, cellsOnEdge, edgesOnCell, nEdgesOnCell, &
                              cf1, cf2, cf3, &
                              rTildeCell, rTildeEdge, & ! deep
+                             config_weak_temperature_gradient, &
                              bdyMaskCell, &  !  addition for regional_MPAS
                              cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                              cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -2954,6 +2978,7 @@ module atm_time_integration
                              zb, zb3, zb_cell, zb3_cell, edgesOnCell_sign, cellsOnEdge, edgesOnCell, nEdgesOnCell, &
                              cf1, cf2, cf3, &
                              rTildeCell, rTildeEdge, & ! deep
+                             config_weak_temperature_gradient, &
                              bdyMaskCell, &  ! addition for regional_MPAS
                              cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
                              cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -3018,6 +3043,7 @@ module atm_time_integration
       integer, intent(in) :: cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd
       integer, intent(in) :: cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd
 
+      logical :: config_weak_temperature_gradient
 
       !
       ! Local variables
@@ -3025,8 +3051,11 @@ module atm_time_integration
       integer :: i, iCell, iEdge, k, cell1, cell2
       real (kind=RKIND) :: invNs, rcv, p0, flux
 
-
-      rcv = rgas/(cp-rgas)
+      if (config_weak_temperature_gradient) then
+         rcv = 0.0_RKIND
+      else
+         rcv = rgas/(cp-rgas)
+      end if
       p0 = 1.0e+05  ! this should come from somewhere else...
 
       ! Avoid FP errors caused by a potential division by zero below by 
@@ -4651,7 +4680,7 @@ module atm_time_integration
       real (kind=RKIND), dimension(nVertLevels,nCells+1) :: t_init 
 
       real (kind=RKIND) :: cf1, cf2, cf3
-      real (kind=RKIND) :: prandtl_inv, r_areaCell, rgas_cprcv
+      real (kind=RKIND) :: prandtl_inv, r_areaCell!, rgas_cprcv ! not used
 
       real (kind=RKIND) :: r_earth
       real (kind=RKIND), dimension(nVertLevels,nCells+1) :: ur_cell
@@ -4827,7 +4856,7 @@ module atm_time_integration
       !
       if(rk_step == 1) then
 
-        rgas_cprcv = rgas*cp/cv
+        ! rgas_cprcv = rgas*cp/cv ! not used
         do iCell = cellStart,cellEnd
 
 !DIR$ IVDEP
@@ -5969,6 +5998,7 @@ module atm_time_integration
       real (kind=RKIND), dimension(:), pointer :: fzm, fzp
       real (kind=RKIND), dimension(:,:,:), pointer :: zb, zb3, zb_cell, zb3_cell
 
+      logical, pointer :: config_weak_temperature_gradient
 
       call mpas_pool_get_dimension(mesh, 'nCells', nCells)
       call mpas_pool_get_dimension(mesh, 'nEdges', nEdges)
@@ -6009,7 +6039,13 @@ module atm_time_integration
       call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
       call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
 
-      rcv = rgas / (cp-rgas)
+      call mpas_pool_get_config(configs, 'config_weak_temperature_gradient', config_weak_temperature_gradient)
+
+      if (config_weak_temperature_gradient) then
+         rcv = 0.0_RKIND
+      else
+         rcv = rgas / (cp-rgas)
+      end if
       p0 = 1.e5  ! this should come from somewhere else...
 
       do iCell=cellStart,cellEnd

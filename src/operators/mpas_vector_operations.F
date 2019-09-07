@@ -776,10 +776,6 @@ contains
       call mpas_unit_vec_in_r3(yHatPlane) ! just to be sure...
       cellTangentPlane(:,1,iCell) = xHatPlane
       cellTangentPlane(:,2,iCell) = yHatPlane
-#ifdef ROTATED_GRID
-      ! Flip cellTangentPlane because edgesOnCell are in clockwise order.
-      cellTangentPlane(:,1,iCell) = - xHatPlane
-#endif
     end do
 
   end subroutine mpas_initialize_vectors!}}}

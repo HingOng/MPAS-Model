@@ -2721,7 +2721,7 @@ module init_atm_cases
       ! Rotate angleEdge
       !
       do iEdge=1,nEdges
-        angleEdge(iEdge) = - (angleEdge(iEdge) + 0.5*pii)
+        angleEdge(iEdge) = 0.5_RKIND*pii - angleEdge(iEdge)
       end do
 #endif
 

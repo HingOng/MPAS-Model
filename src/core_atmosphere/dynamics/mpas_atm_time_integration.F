@@ -4362,7 +4362,6 @@ module atm_time_integration
       logical, pointer :: config_rayleigh_damp_u
       logical, pointer :: config_deep_atmosphere
       logical, pointer :: on_a_sphere
-      logical, pointer :: config_weak_temperature_gradient
       real (kind=RKIND), pointer :: config_rayleigh_damp_u_timescale_days
       integer, pointer :: config_number_rayleigh_damp_u_levels
 
@@ -4389,7 +4388,6 @@ module atm_time_integration
       call mpas_pool_get_config(configs, 'config_number_rayleigh_damp_u_levels', config_number_rayleigh_damp_u_levels)
       call mpas_pool_get_config(configs, 'config_deep_atmosphere', config_deep_atmosphere)
       call mpas_pool_get_config(mesh, 'on_a_sphere', on_a_sphere)
-      call mpas_pool_get_config(configs, 'config_weak_temperature_gradient', config_weak_temperature_gradient)
 
       call mpas_pool_get_array(state, 'rho_zz', rho_zz, 2)
       call mpas_pool_get_array(state, 'u', u, 2)
@@ -4529,7 +4527,7 @@ module atm_time_integration
          config_h_theta_eddy_visc4, config_h_mom_eddy_visc4, config_visc4_2dsmag, config_len_disp, rk_step, dt, &
          config_mpas_cam_coef, &
          config_rayleigh_damp_u, config_rayleigh_damp_u_timescale_days, config_number_rayleigh_damp_u_levels, &
-         config_deep_atmosphere, on_a_sphere, config_weak_temperature_gradient, &
+         config_deep_atmosphere, on_a_sphere, &
          tend_rtheta_adv, rthdynten, &
          cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
          cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -4558,7 +4556,7 @@ module atm_time_integration
       config_h_theta_eddy_visc4, config_h_mom_eddy_visc4, config_visc4_2dsmag, config_len_disp, rk_step, dt, &
       config_mpas_cam_coef, &
       config_rayleigh_damp_u, config_rayleigh_damp_u_timescale_days, config_number_rayleigh_damp_u_levels, &
-      config_deep_atmosphere, on_a_sphere, config_weak_temperature_gradient, &
+      config_deep_atmosphere, on_a_sphere, &
       tend_rtheta_adv, rthdynten, &
       cellStart, cellEnd, vertexStart, vertexEnd, edgeStart, edgeEnd, &
       cellSolveStart, cellSolveEnd, vertexSolveStart, vertexSolveEnd, edgeSolveStart, edgeSolveEnd)
@@ -4687,7 +4685,6 @@ module atm_time_integration
       logical, intent(in) :: config_rayleigh_damp_u
       logical, intent(in) :: config_deep_atmosphere
       logical, intent(in) :: on_a_sphere
-      logical, intent(in) :: config_weak_temperature_gradient
       real (kind=RKIND), intent(in) :: config_rayleigh_damp_u_timescale_days
       integer, intent(in) :: config_number_rayleigh_damp_u_levels
 
@@ -5310,12 +5307,6 @@ module atm_time_integration
       end do
 
 !----------- rhs for theta
-
-      if (config_weak_temperature_gradient) then
-         do iCell=cellSolveStart,cellSolveEnd
-            tend_theta(1:nVertLevels,iCell) = 0.0
-         end do
-      else
       
       !
       !  horizontal advection for theta
@@ -5505,8 +5496,6 @@ module atm_time_integration
             tend_theta(k,iCell) = tend_theta(k,iCell) + tend_theta_euler(k,iCell) + tend_rtheta_physics(k,iCell)
          end do
       end do
-
-      endif ! config_weak_temperature_gradient
 
    end subroutine atm_compute_dyn_tend_work
 

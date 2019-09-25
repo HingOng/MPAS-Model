@@ -2716,14 +2716,12 @@ module init_atm_cases
       nz1 = nVertLevels
       nz = nz1 + 1
 
-#ifdef ROTATED_GRID
       !
       ! Rotate angleEdge
       !
       do iEdge=1,nEdges
         angleEdge(iEdge) = 0.5_RKIND*pii - angleEdge(iEdge)
       end do
-#endif
 
       call mpas_pool_get_array(mesh, 'zgrid', zgrid)
       call mpas_pool_get_array(mesh, 'zb', zb)
@@ -2919,7 +2917,7 @@ module init_atm_cases
       do i=1, nCells
         do k=1,nz1
           ztemp       = .5*(zgrid(k+1,i)+zgrid(k,i))
-          phi_wave    = 0.0 ! phi0 * exp(0.5*ztemp*rH) * cos(m_wave*ztemp+phsh_phi) * cos(k_wave*xCell(i    ))
+          phi_wave    = phi0 * exp(0.5*ztemp*rH) * cos(m_wave*ztemp+phsh_phi) * cos(k_wave*xCell(i    ))
           p     (k,i) = 1.0_RKIND ! pb(k,i) + phi_wave/(cp*tb(k,i)) ! weak temperature gradient trick
           pp    (k,i) = phi_wave*ppb(k,i)/(rgas*t0) ! p0* p(k,i)**(cp/rgas) - ppb(k,i) ! weak temperature gradient trick
           rho   (k,i) = (ppb(k,i)+pp(k,i))/(rgas*t0)

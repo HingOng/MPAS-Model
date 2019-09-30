@@ -2773,7 +2773,7 @@ module init_atm_cases
       call atm_initialize_deformation_weights(mesh, nCells, on_a_sphere, sphere_radius)
 
       xnutr = 0. ! no w damping
-      zd = 12500.
+      zd = 25000.
 
       p0 = 1.e+05
       rcp = rgas/cp
@@ -2781,7 +2781,7 @@ module init_atm_cases
 
       !     metrics for hybrid coordinate and vertical stretching
       str = 1.0
-      zt = 12500.
+      zt = 12721. ! equivalent to zt = 12500. in anelastic models
       dz = zt/float(nz1)
 !      call mpas_log_write(' dz = $r', realArgs=(/dz/))
 
@@ -2789,8 +2789,9 @@ module init_atm_cases
       rH         = gravity/(rgas*t0)
       k_wave     = 2.*pii/(2.e5*a_scale) ! 2.e5 is the width of the domain in meters.
       m_wave     = pii/zt
-      omega_wave = 2.*omega*k_wave*rH/( k_wave**2 +m_wave**2 +0.25* rH**2 ) ! dispersion relation
-      u0         = 0.72
+      omega_wave = 2.*omega*k_wave*rH/( k_wave**2 +m_wave**2 +0.25* rH**2 +4.* omega**2 /(rgas*t0) ) ! dispersion relation
+                                                            ! 4.* omega**2 /(rgas*t0) is the fully compressible adjustment
+      u0         = 0.09
       phi0       = u0*(4.* omega**2 - omega_wave**2 )* &
                    (  omega**2 * rH**2 +4.* omega**2 * m_wave**2 &
                      -2.*omega*omega_wave*k_wave*rH+ omega_wave**2 * k_wave**2  )**(-0.5) ! polarization relation

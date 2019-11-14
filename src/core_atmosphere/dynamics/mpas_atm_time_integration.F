@@ -5154,23 +5154,6 @@ module atm_time_integration
          end do
       end do
 
-      if (config_deep_atmosphere) then
-         do iCell = cellSolveStart, cellSolveEnd
-!DIR$ IVDEP
-            do k=2,nVertLevels
-               ! deep Eq. (20)
-               tend_w(k,iCell) = tend_w(k,iCell) + (fzm(k)*rTildeCell(k,iCell)+fzp(k)*rTildeCell(k-1,iCell))   &
-                                   * (    inv_r_earth*(rho_zz(k,iCell)*fzm(k)+rho_zz(k-1,iCell)*fzp(k))        &
-                                       * ( (fzm(k)*ur_cell(k,iCell)+fzp(k)*ur_cell(k-1,iCell))**2.             &
-                                          +(fzm(k)*vr_cell(k,iCell)+fzp(k)*vr_cell(k-1,iCell))**2. )           &
-                                     + 2.*omega*cos(latCell(iCell))                                            &
-                                          *(fzm(k)*ur_cell(k,iCell)+fzp(k)*ur_cell(k-1,iCell))                 &
-                                          *(rho_zz(k,iCell)*fzm(k)+rho_zz(k-1,iCell)*fzp(k))    )
-
-            end do
-         end do
-      endif
-
       !
       !  horizontal mixing for w - we could combine this with advection directly (i.e. as a turbulent flux),
       !  but here we can also code in hyperdiffusion if we wish (2nd order at present)
@@ -5279,6 +5262,22 @@ module atm_time_integration
           end if
 
       end do
+
+      if (config_deep_atmosphere) then
+         do iCell = cellSolveStart, cellSolveEnd
+!DIR$ IVDEP
+            do k=2,nVertLevels
+               ! deep Eq. (20)
+               tend_w(k,iCell) = tend_w(k,iCell) + (fzm(k)*rTildeCell(k,iCell)+fzp(k)*rTildeCell(k-1,iCell))   &
+                                         * ( inv_r_earth*(rho_zz(k,iCell)*fzm(k)+rho_zz(k-1,iCell)*fzp(k))     &
+                                             * ( (fzm(k)*ur_cell(k,iCell)+fzp(k)*ur_cell(k-1,iCell))**2.       &
+                                                +(fzm(k)*vr_cell(k,iCell)+fzp(k)*vr_cell(k-1,iCell))**2. )     &
+                                            + 2.*omega*cos(latCell(iCell))                                     &
+                                              *(fzm(k)*ur_cell(k,iCell)+fzp(k)*ur_cell(k-1,iCell))             &
+                                              *(rho_zz(k,iCell)*fzm(k)+rho_zz(k-1,iCell)*fzp(k))           )
+            end do
+         end do
+      endif
 
       if (rk_step == 1) then
 

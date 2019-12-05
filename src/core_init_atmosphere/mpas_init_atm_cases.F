@@ -183,9 +183,12 @@ module init_atm_cases
             block_ptr => block_ptr % next
          end do
 
-      else if (config_init_case == 11 ) then
+      else if ((config_init_case == 11) .or. (config_init_case == 12) .or. (config_init_case == 13)) then
 
          call mpas_log_write(' dcmip test case setup - Ullich, Melvin & Jablonowski idealized baroclinic wave test case')
+         if (config_init_case == 11) call mpas_log_write(' no initial perturbation ')
+         if (config_init_case == 12) call mpas_log_write(' exponential type initial perturbation included ')
+         if (config_init_case == 13) call mpas_log_write(' stream-function type initial perturbation included ')
          block_ptr => domain % blocklist
          do while (associated(block_ptr))
 
@@ -3125,7 +3128,8 @@ module init_atm_cases
 
       logical, parameter :: chem_terminator = .false., cam_vert_config = .true.
 
-      integer, parameter :: zcoords_dcmip=1, pertt_umj=0, config_moist_dcmip=0
+      integer, parameter :: zcoords_dcmip=1, config_moist_dcmip=0
+      integer :: pertt_umj
       real (kind=RKIND), parameter :: X_dcmip = 1.
       real (kind=RKIND) lon_dcmip,lat_dcmip,                           &
                         p_dcmip,z_dcmip,u_dcmip,v_dcmip,               &
@@ -3159,6 +3163,14 @@ module init_atm_cases
          deep_dcmip = 1
       else
          deep_dcmip = 0
+      end if
+
+      if (test_case .eq. 11) then
+         pertt_umj = -1
+      else if (test_case .eq. 12) then
+         pertt_umj = 0
+      else if (test_case .eq. 13) then
+         pertt_umj = 1
       end if
       
       call mpas_log_write(' DCMIP bwave initialization ')
@@ -3529,13 +3541,11 @@ module init_atm_cases
          
         do k=1,nz1
           z_dcmip = .5*(zgrid(k+1,i)+zgrid(k,i))
-          call mpas_log_write('Before calling baroclinic_wave_test')
           call baroclinic_wave_test (deep_dcmip, config_moist_dcmip, pertt_umj, X_dcmip,  &
                                      lon_dcmip, lat_dcmip, p_dcmip, z_dcmip,       &
                                      zcoords_dcmip, u_dcmip, v_dcmip, t_dcmip,     &
                                      thetav_dcmip, phis_dcmip, ps_dcmip, rho_dcmip,& 
                                      q_dcmip)
-          call mpas_log_write('After calling baroclinic_wave_test')
 
           scalars(index_qv,k,i) = q_dcmip/(1.-q_dcmip)  ! q_dcmip is specific humidity
      

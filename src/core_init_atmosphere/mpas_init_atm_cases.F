@@ -3130,7 +3130,7 @@ module init_atm_cases
 
       integer, parameter :: zcoords_dcmip=1, config_moist_dcmip=0
       integer :: pertt_umj
-      real (kind=RKIND), parameter :: X_dcmip = 1.
+      real (kind=RKIND), parameter :: X_dcmip = 20.
       real (kind=RKIND) lon_dcmip,lat_dcmip,                           &
                         p_dcmip,z_dcmip,u_dcmip,v_dcmip,               &
                         w_dcmip,t_dcmip,phis_dcmip,ps_dcmip,rho_dcmip, & 

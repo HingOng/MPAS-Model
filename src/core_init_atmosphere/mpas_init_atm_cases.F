@@ -742,14 +742,14 @@ module init_atm_cases
 
       if (config_deep_atmosphere.and.on_a_sphere)then
          do iCell=1,nCells
-            do k=1,nz
+            do k=1,nz1
                rTildeCell(k,iCell) = 1.0 + 0.5 * (zgrid(k,iCell)+zgrid(k+1,iCell)) / r_earth
             end do
          end do
          do i=1, nEdges
             iCell1 = cellsOnEdge(1,i)
             iCell2 = cellsOnEdge(2,i)
-            do k=1,nz
+            do k=1,nz1
                rTildeEdge(k,i) = 0.5 * (rTildeCell(k,iCell1) + rTildeCell(k,iCell2))
             end do
          end do
@@ -757,7 +757,7 @@ module init_atm_cases
             iCell1 = cellsOnVertex(1,i)
             iCell2 = cellsOnVertex(2,i)
             iCell3 = cellsOnVertex(3,i)
-            do k=1,nz
+            do k=1,nz1
                rTildeVertex(k,i) = 0.5 * ( (kiteAreasOnVertex(1,i)+kiteAreasOnVertex(2,i)) * rTildeCell(k,iCell3) &
                                          + (kiteAreasOnVertex(2,i)+kiteAreasOnVertex(3,i)) * rTildeCell(k,iCell1) &
                                          + (kiteAreasOnVertex(3,i)+kiteAreasOnVertex(1,i)) * rTildeCell(k,iCell2) ) &
@@ -3126,7 +3126,7 @@ module init_atm_cases
 
       !  dcmip initialization declarations
 
-      logical, parameter :: chem_terminator = .false., cam_vert_config = .true.
+      logical, parameter :: chem_terminator = .false., cam_vert_config = .false.
 
       integer, parameter :: zcoords_dcmip=1, config_moist_dcmip=0
       integer :: pertt_umj
@@ -3151,6 +3151,13 @@ module init_atm_cases
       real (kind=RKIND), dimension(:,:), pointer :: uReconstructZonal
       real (kind=RKIND), dimension(:,:), pointer :: uReconstructMeridional
 
+      real (kind=RKIND) z0, z1, z2, dz1, dz2, weight1, weight2, r_c, r_c_top
+
+      real (kind=RKIND), dimension(nVertLevels+1) :: hydrostatic_nct
+      integer :: km1, kw
+
+      logical, parameter :: discrete_hydrostatic_base = .true.
+      real (kind=RKIND) :: pitop, rhotop, thetatop
 
 !-----------------
 
@@ -3195,6 +3202,10 @@ module init_atm_cases
       call mpas_pool_get_array(mesh, 'kiteAreasOnVertex', kiteAreasOnVertex)
       call mpas_pool_get_config(mesh, 'on_a_sphere', on_a_sphere)
       call mpas_pool_get_config(mesh, 'sphere_radius', sphere_radius)
+
+      call mpas_log_write(' UMJ baroclinic wave setup, sphere radius is $r', realArgs=(/sphere_radius/))
+      call mpas_log_write(' UMJ baroclinic wave setup, X_dcmip is       $r', realArgs=(/X_dcmip/))
+      call mpas_log_write(' UMJ baroclinic wave setup, rotation_rate is $r', realArgs=(/omega/))
 
       xCell(:) = xCell(:) * sphere_radius
       yCell(:) = yCell(:) * sphere_radius
@@ -3300,7 +3311,7 @@ module init_atm_cases
       call mpas_pool_get_dimension(state, 'index_cl2', index_cl2) 
 
       xnutr = 0.0
-      zd = 12000.0
+      zd = 20000.0
       !xnutr = config_xnutr
       !zd = config_zd
 
@@ -3318,35 +3329,14 @@ module init_atm_cases
       end do
       call mpas_log_write(' hx computation complete ')
 
-      !     Metrics for hybrid coordinate and vertical stretching
+      !  Setup for UMJ vertical grid, from the 2013 paper
 
-      !str = 1.5
-
-      ! 2014 TC experiments - 55 levels
-      !zt = 30000.
-      !dz = zt/float(nz1)
-      !als   =  .075
-      !alt   = 1.7
-      !zetal =  .75
-
-      zt = 35000.
+      zt = 30000.
       dz = zt/float(nz1)
-      als   =  .08
-      alt   = 1.667121
-      zetal =  .75
 
       do k=1,nz
-         zl = 1.-alt*(1.-zetal)
-         if ((real(k-1)/real(nz1)).LT.zetal) then
-             zw(k) =              (als*real(K-1)/real(nz1)      &
-                 +(3.*(1.-alt)+2.*(alt-als)*zetal)              &
-                                 *((K-1)*dz/(zt*zetal))**2      &
-                 -(2.*(1.-alt) +  (alt-als)*zetal)              &
-                                  *(real(k-1)*dz/(zt*zetal))**3) * zt
-          else
-             zw(K) = (zl+alt*(real(K-1)/real(nz1)-zetal))*zt
-          end if
-          if (k > 1) dzw(k-1) = zw(k)-zw(k-1)
+        zw(k) = zt*(sqrt(15.*(real(k-1)/real(nz1))**2 + 1.) - 1.)/(sqrt(15. + 1.) - 1.)
+        if (k > 1) dzw(k-1) = zw(k)-zw(k-1)
       end do
 
       !SHP-CAM.L30
@@ -3387,28 +3377,6 @@ module init_atm_cases
 
       call mpas_log_write(' k, zw, ah ')
       do k=1,nz
-
-!           sh(k) is the stretching specified for height surfaces
-
-!            sh(k) = (real(k-1)*dz/zt)**str 
-
-!           to specify specific heights zc(k) for coordinate surfaces,
-!           input zc(k) and define sh(k) = zc(k)/zt
-!           zw(k) is the hieght of zeta surfaces
-!                zw(k) = (k-1)*dz yields constant dzeta
-!                        and nonconstant dzeta/dz
-!                zw(k) = sh(k)*zt yields nonconstant dzeta
-!                        and nearly constant dzeta/dz 
-
-!            zw(k) = float(k-1)*dz
-!            zw(k) = sh(k)*zt
-!
-!           ah(k) governs the transition between terrain-following 
-!           and pureheight coordinates
-!                ah(k) = 0 is a terrain-following coordinate
-!                ah(k) = 1 is a height coordinate
- 
-!            ah(k) = 1.-cos(.5*pii*(k-1)*dz/zt)**6
             ah(k) = 1.
             call mpas_log_write('$i $r $r',intArgs=(/k/),realArgs=(/zw(k),ah(k)/))
       end do
@@ -3422,8 +3390,13 @@ module init_atm_cases
       do k=2,nz1
          dzu (k)  = .5*(dzw(k)+dzw(k-1))
          rdzu(k)  =  1./dzu(k)
+         ! fzp and fzm for interp to w
          fzp (k)  = .5* dzw(k  )/dzu(k)
          fzm (k)  = .5* dzw(k-1)/dzu(k)
+         ! fzp and fzm for vertical integral over w volume
+         fzm (k)  = .5* dzw(k  )/dzu(k)
+         fzp (k)  = .5* dzw(k-1)/dzu(k)
+
          rdzwp(k) = dzw(k-1)/(dzw(k  )*(dzw(k)+dzw(k-1)))
          rdzwm(k) = dzw(k  )/(dzw(k-1)*(dzw(k)+dzw(k-1)))
       end do
@@ -3432,9 +3405,15 @@ module init_atm_cases
 
       COF1 = (2.*DZU(2)+DZU(3))/(DZU(2)+DZU(3))*DZW(1)/DZU(2) 
       COF2 =     DZU(2)        /(DZU(2)+DZU(3))*DZW(1)/DZU(3) 
+
       CF1  = FZP(2) + COF1
       CF2  = FZM(2) - COF1 - COF2
       CF3  = COF2       
+      ! switched for vertical integral over w volume
+      CF1  = FZM(2) - COF1 - COF2
+      CF2  = FZP(2) + COF1
+      CF3  = COF2       
+
 
 !      d1  = .5*dzw(1)
 !      d2  = dzw(1)+.5*dzw(2)
@@ -3475,16 +3454,16 @@ module init_atm_cases
         end do
       end do
 
-      if (config_deep_atmosphere.and.on_a_sphere)then
+      if (config_deep_atmosphere.and.on_a_sphere) then
          do iCell=1,nCells
-            do k=1,nz
+            do k=1,nz1
                rTildeCell(k,iCell) = 1.0 + 0.5 * (zgrid(k,iCell)+zgrid(k+1,iCell)) / r_earth
             end do
          end do
          do i=1, nEdges
             iCell1 = cellsOnEdge(1,i)
             iCell2 = cellsOnEdge(2,i)
-            do k=1,nz
+            do k=1,nz1
                rTildeEdge(k,i) = 0.5 * (rTildeCell(k,iCell1) + rTildeCell(k,iCell2))
             end do
          end do
@@ -3492,7 +3471,7 @@ module init_atm_cases
             iCell1 = cellsOnVertex(1,i)
             iCell2 = cellsOnVertex(2,i)
             iCell3 = cellsOnVertex(3,i)
-            do k=1,nz
+            do k=1,nz1
                rTildeVertex(k,i) = 0.5 * ( (kiteAreasOnVertex(1,i)+kiteAreasOnVertex(2,i)) * rTildeCell(k,iCell3) &
                                          + (kiteAreasOnVertex(2,i)+kiteAreasOnVertex(3,i)) * rTildeCell(k,iCell1) &
                                          + (kiteAreasOnVertex(3,i)+kiteAreasOnVertex(1,i)) * rTildeCell(k,iCell2) ) &
@@ -3515,23 +3494,83 @@ module init_atm_cases
 !     reference sounding based on dry isothermal atmosphere
 !
       do i=1, nCells
-        do k=1,nz1
-          ztemp    = .5*(zgrid(k+1,i)+zgrid(k,i))
-          ppb(k,i) = p0*exp(-gravity*ztemp/(rgas*t0b)) 
-          pb (k,i) = (ppb(k,i)/p0)**(rgas/cp)
-          rb (k,i) = ppb(k,i)/(rgas*t0b*zz(k,i))
-          tb (k,i) = t0b/pb(k,i)
-          rtb(k,i) = rb(k,i)*tb(k,i)
-          p  (k,i) = pb(k,i)
-          pp (k,i) = 0.
-          rr (k,i) = 0.
-        end do
 
-!       if(i == 1) then
-!         do k=1,nz1
-!           write(0,*) ' k, ppb, pb, rb, tb (k,1) ',k,ppb(k,1),pb(k,1),rb(k,1)*zz(k,1),tb(k,1)
-!         end do
-!       end if
+          do k=1,nz1
+            ztemp    = .5*(zgrid(k+1,i)+zgrid(k,i))
+            if (config_deep_atmosphere.and.on_a_sphere) &
+                 ztemp = ztemp/(1.0+ztemp/r_earth) 
+            ppb(k,i) = p0*exp(-gravity*ztemp/(rgas*t0b)) 
+            pb (k,i) = (ppb(k,i)/p0)**(rgas/cp)
+            rb (k,i) = (rTildeCell(k,i)**2)*ppb(k,i)/(rgas*t0b*zz(k,i))
+            tb (k,i) = t0b/pb(k,i)
+            rtb(k,i) = rb(k,i)*tb(k,i)
+            p  (k,i) = pb(k,i)
+            pp (k,i) = 0.
+            rr (k,i) = 0.
+         end do
+
+         if(i == 1) then
+           call mpas_log_write(' analytic hydrostatic reference state ')
+           do k=1,nz1
+             call mpas_log_write(' k, ppb, pb, rb, tb (k,1), $i, $r, $r, $r, $r ',intArgs=(/k/),realArgs=(/ppb(k,1),pb(k,1),rb(k,1)*zz(k,1),tb(k,1)/))
+           end do
+         end if
+
+       if(discrete_hydrostatic_base) then ! analytic is first guess (for p, density)
+
+         r_c_top = 1.0
+         if (config_deep_atmosphere.and.on_a_sphere) &
+         r_c_top = 1.0 + 0.5*zgrid(nz,i)/r_earth
+
+         ztemp = zgrid(nz,i)
+         if (config_deep_atmosphere.and.on_a_sphere) &
+              ztemp = ztemp/(1.0+ztemp/r_earth) 
+         ptop = p0*exp(-gravity*ztemp/(rgas*t0b)) ! lid pressure
+         pitop = (ptop/p0)**(rgas/cp)             ! lid exner function
+         rhotop = ptop/(rgas*t0b*zz(nz1,i))         ! lid coupled density
+         thetatop = t0b/pitop                     ! lid potential temperature
+
+         ! downward hydrostatic integration to first half level from lid
+
+         k = nz1
+         weight1 = 0.5/rTildeCell(nz1,i)**2
+         weight2 = 0.5/r_c_top**2
+         r_c = 0.5*(rTildeCell(nz1,i)+r_c_top)
+
+         do itrp = 1,25
+           ppb(k,i) = ptop +.5*dzw(nz1)*(gravity)*(weight1*rb(k,i)+weight2*rhotop)/(r_c**2)
+           rb (k,i) = (rTildeCell(k,i)**2)*ppb(k,i)/(rgas*t0b*zz(k,i))
+         end do
+
+         do k=nz1-1, 1, -1
+
+           weight1 = fzp(k+1)/rTildeCell(k,i)**2 
+           weight2 = fzm(k+1)/rTildeCell(k+1,i)**2 
+           r_c = fzp(k+1)*rTildeCell(k,i)+fzm(k+1)*rTildeCell(k+1,i)
+
+           do itrp = 1,25
+             ppb(k,i) = ppb(k+1,i)+dzu(k+1)*(gravity)*(weight1*rb(k,i)+weight2*rb(k+1,i))/(r_c**2)
+             rb (k,i) = (rTildeCell(k,i)**2)*ppb(k,i)/(rgas*t0b*zz(k,i))
+           end do
+           
+         end do
+
+         do k=1,nz1
+           pb (k,i) = (ppb(k,i)/p0)**(rgas/cp)
+           tb (k,i) = t0b/pb(k,i)
+           rtb(k,i) = rb(k,i)*tb(k,i)
+           p  (k,i) = pb(k,i)
+         end do
+
+
+         if(i >= nCells-1) then
+           call mpas_log_write(' discrete hydrostatic reference state, column $i ',intArgs=(/i/))
+           do k=1,nz1
+             call mpas_log_write(' k, ppb, pb, rb, tb (k,1), $i, $r, $r, $r, $r ',intArgs=(/k/),realArgs=(/ppb(k,1),pb(k,1),rb(k,1)*zz(k,1),tb(k,1)/))
+           end do
+         end if
+
+       end if
 
 !  given heights and latitude, initial moisture here for DCMIP bwave test case.
 !  this is specific humidity
@@ -3539,6 +3578,47 @@ module init_atm_cases
         lat_dcmip = latCell(i)
         lon_dcmip = lonCell(i)
          
+        if (config_deep_atmosphere.and.on_a_sphere) then
+
+          if(i == 1) call mpas_log_write(' deep_atmosphere: setting NCT terms in hydrostatic balance ')
+
+          ! do k=1,nz  ! we are computing the hydrostatic nct terms at W levels here
+          !  z_dcmip = zgrid(k,i)
+          !  call baroclinic_wave_test (deep_dcmip, config_moist_dcmip, pertt_umj, X_dcmip,  &
+          !                             lon_dcmip, lat_dcmip, p_dcmip, z_dcmip,       &
+          !                             zcoords_dcmip, u_dcmip, v_dcmip, t_dcmip,     &
+          !                             thetav_dcmip, phis_dcmip, ps_dcmip, rho_dcmip,& 
+          !                             q_dcmip)
+          !
+          !  km1 = max(k-1,1)
+          !  kw = min(k,nz1)
+          !  r_c = 0.5*(rTildeCell(km1,i)+rTildeCell(kw,i))
+          !  hydrostatic_nct(k) = (((u_dcmip**2 + v_dcmip**2)/(r_earth*r_c)) + 2.*omega_e*u_dcmip*cos(lat_dcmip))/r_c
+          !                       
+          ! end do
+
+          do k=1,nz1  ! we are computing the hydrostatic nct terms at U levels here
+            z_dcmip = 0.5*(zgrid(k,i)+zgrid(k+1,i))
+            call baroclinic_wave_test (deep_dcmip, config_moist_dcmip, pertt_umj, X_dcmip,  &
+                                       lon_dcmip, lat_dcmip, p_dcmip, z_dcmip,       &
+                                       zcoords_dcmip, u_dcmip, v_dcmip, t_dcmip,     &
+                                       thetav_dcmip, phis_dcmip, ps_dcmip, rho_dcmip,& 
+                                       q_dcmip)
+
+            hydrostatic_nct(k) = (((u_dcmip**2 + v_dcmip**2)/(r_earth*r_c)) + 2.*omega_e*u_dcmip*cos(lat_dcmip))/rTildeCell(k,i)
+
+          end do
+
+        else
+
+          if(i == 1) call mpas_log_write(' shallow_atmosphere: setting NCT terms to zero ')
+
+          do k=1,nz
+            hydrostatic_nct(k) = 0.
+          end do
+
+        end if 
+
         do k=1,nz1
           z_dcmip = .5*(zgrid(k+1,i)+zgrid(k,i))
           call baroclinic_wave_test (deep_dcmip, config_moist_dcmip, pertt_umj, X_dcmip,  &
@@ -3554,7 +3634,7 @@ module init_atm_cases
 
           !SHP-DCMIP :: first guess values from analytic solution
           pp(k,i) = p_dcmip - ppb(k,i)
-          rr(k,i) = rho_dcmip/(1.+scalars(index_qv,k,i)) - rb(k,i)
+          rr(k,i) = (rTildeCell(k,i)**2)*rho_dcmip/(1.+scalars(index_qv,k,i)) - rb(k,i)
 !!          rr(k,i) = rho_dcmip/(1.+scalars(index_qv,k,i))/zz(k,i) - rb(k,i)
 
           !initialize of chemistry-terminator
@@ -3567,22 +3647,49 @@ module init_atm_cases
 
         end do
 
-        do itrp = 1,25
+        ! weights for hydrostatic interp to the surface
+
+        z0 = zgrid(1,i)  ! surface
+        z1 = 0.5*(zgrid(2,i)+zgrid(1,i))  ! first mass level
+        z2 = 0.5*(zgrid(3,i)+zgrid(2,i))  ! second mass level
+
+        dz1 = z1-z0
+        dz2 = z2-z1
+
+        weight2 = -0.5*dz1/dz2 ! linear interp weights to midpoint between lowest level and surface 
+       weight1 = 1.-weight2   ! used to calculate surface pressure
+
+        ! weight2 = -0.25  ! original weights
+        ! weight1 = 1.25 
+
+        if(i == nCells ) call mpas_log_write(' last column, perturbation balance, last column bottom rb, $r ',realArgs=(/rb(1,nCells)/))
+
+        do itrp = 1,50
 
           do k=1,nz1
-            rr(k,i)  = (pp(k,i)/(rgas*zz(k,i)) - rb(k,i)*(tt(k)-t0b))/tt(k)
+            rr(k,i)  = ((rTildeCell(k,i)**2)*pp(k,i)/(rgas*zz(k,i)) - rb(k,i)*(tt(k)-t0b))/tt(k)
           end do
 
           !! ps_dcmip is bottom boundary condition
-          ppi(1) = ps_dcmip -.5*dzw(1)*gravity                         &
-                        *(1.25*(rr(1,i)+rb(1,i))*(1.+scalars(index_qv,1,i))   &
-                          -.25*(rr(2,i)+rb(2,i))*(1.+scalars(index_qv,2,i)))
+          r_c = 0.5*(rTildeCell(1,i)+1.0) ! this assumes that surface is z=0 meters
+          ppi(1) = ps_dcmip -.5*dzw(1)*(gravity)                                                                 &
+                        *( weight1*((rr(1,i)+rb(1,i)))*(1.+scalars(index_qv,1,i))/(rTildeCell(1,i)**2)           &
+                          +weight2*((rr(2,i)+rb(2,i)))*(1.+scalars(index_qv,2,i))/(rTildeCell(2,i)**2))/(r_c**2) &
+                           +0.5*dzw(1)*( weight1*(rr(1,i)+rb(1,i))*hydrostatic_nct(1)                            &
+                                        +weight2*(rr(2,i)+rb(2,i))*hydrostatic_nct(2) )
+!                           +0.5*dzw(1)*(weight1*(rr(1,i)+rb(1,i))+weight2*(rr(2,i)+rb(2,i)))
+!                             *(3.*hydrostatic_nct(1)+hydrostatic_nct(2))/4.
 
           ppi(1) = ppi(1)-ppb(1,i)
           do k=1,nz1-1
-             ppi(k+1) = ppi(k)-dzu(k+1)*gravity*                                                  &
-                           ( (rr(k  ,i)+(rr(k  ,i)+rb(k  ,i))*scalars(index_qv,k  ,i))*fzp(k+1)   &
-                           + (rr(k+1,i)+(rr(k+1,i)+rb(k+1,i))*scalars(index_qv,k+1,i))*fzm(k+1) )
+             r_c = fzp(k+1)*rTildeCell(k,i)+fzm(k+1)*rTildeCell(k+1,i)
+             ppi(k+1) = ppi(k)-dzu(k+1)*(gravity)                                                                                   &
+                           *( (rr(k  ,i) + (rr(k  ,i)+rb(k  ,i))*scalars(index_qv,k  ,i))*fzp(k+1)/(rTildeCell(k,i  )**2)           &
+                             +(rr(k+1,i) + (rr(k+1,i)+rb(k+1,i))*scalars(index_qv,k+1,i))*fzm(k+1)/(rTildeCell(k+1,i)**2))/(r_c**2) &
+                              +dzu(k+1)*( fzp(k+1)*(rr(k,i)+rb(k,i))*hydrostatic_nct(k)                                             &
+                                         +fzm(k+1)*(rr(k+1,i)+rb(k+1,i))*hydrostatic_nct(k+1) )
+!                              +dzu(k+1)*(fzp(k+1)*(rr(k,i)+rb(k,i))+fzm(k+1)*(rr(k+1,i)+rb(k+1,i)))
+!                             *(hydrostatic_nct(k+1))
 
           end do
 
@@ -3601,12 +3708,19 @@ module init_atm_cases
         end do
 
         !calculation of surface pressure:
-        surface_pressure(i) = 0.5*dzw(1)*gravity                                    &
-                        * (1.25*(rr(1,i) + rb(1,i)) * (1. + scalars(index_qv,1,i))  &
-                        -  0.25*(rr(2,i) + rb(2,i)) * (1. + scalars(index_qv,2,i)))
+        r_c = 0.5*(rTildeCell(1,i)+1.0) ! this assumes that surface is z=0 meters
+        surface_pressure(i) = 0.5*dzw(1)*(gravity)                                                                   &
+                        * (weight1*(rr(1,i) + rb(1,i)) * (1. + scalars(index_qv,1,i)/(rTildeCell(1,i)**2))           &
+                        +  weight2*(rr(2,i) + rb(2,i)) * (1. + scalars(index_qv,2,i)/(rTildeCell(2,i)**2)))/(r_c**2) &
+                           -0.5*dzw(1)*( weight1*(rr(1,i)+rb(1,i))*hydrostatic_nct(1)                                &
+                                        +weight2*(rr(2,i)+rb(2,i))*hydrostatic_nct(2) )
+!                           -0.5*dzw(1)*(weight1*(rr(1,i)+rb(1,i))+weight2*(rr(2,i)+rb(2,i)))
+!                             *(3.*hydrostatic_nct(1)+hydrostatic_nct(2))/4.
         surface_pressure(i) = surface_pressure(i) + pp(1,i) + ppb(1,i)
 
       end do  ! end loop over cells
+
+        call mpas_log_write(' cell loop complete, last column bottom rb, $r ',realArgs=(/rb(1,nCells)/))
 
       do iEdge=1,nEdges
 
@@ -3700,8 +3814,8 @@ module init_atm_cases
 
       end do
 
-      rw = 0.0
-      w = 0.0
+      rw(:,:) = 0.0
+      w(:,:) = 0.0
 
       !
       ! Compute mass fluxes tangential to each edge (i.e., through the faces of dual grid cells)
@@ -3718,22 +3832,20 @@ module init_atm_cases
 
       call mpas_log_write(' i, psurf, lat ')
       do i=1,10
-        psurf = (cf1*(ppb(1,i)+pp(1,i)) + cf2*(ppb(2,i)+pp(2,i)) + cf3*(ppb(3,i)+pp(3,i)))/100.
-
-            psurf = (ppb(1,i)+pp(1,i)) + .5*dzw(1)*gravity        &
-                          *(1.25*(rr(1,i)+rb(1,i))*(1.+scalars(index_qv,1,i))   &
-                            -.25*(rr(2,i)+rb(2,i))*(1.+scalars(index_qv,2,i)))
-
-        call mpas_log_write('$i $r $r',intArgs=(/i/),realArgs=(/psurf,latCell(i)*180./3.1415828/))
+        call mpas_log_write('$i $r $r',intArgs=(/i/),realArgs=(/surface_pressure(i),latCell(i)*180./3.1415828/))
       end do
 
       ! Compute rho and theta from rho_zz and theta_m
       do iCell=1,nCells
          do k=1,nVertLevels
-            rho(k,iCell) = rho_zz(k,iCell) * zz(k,iCell)
+            rho(k,iCell) = rho_zz(k,iCell) * zz(k,iCell)/(rTildeCell(k,iCell)**2)
             theta(k,iCell) = t(k,iCell) / (1.0 + 1.61 * scalars(index_qv,k,iCell))
          end do
       end do
+
+          do k=1,nz1
+            call mpas_log_write(' k, rb = $i, $r, $r', intArgs=(/k/), realArgs=(/rb(k,nCells),rho(k,nCells)/))
+          end do
 
       ! Reconstruct zonal and meridional winds for diagnostic puposes:
       !
@@ -7257,7 +7369,7 @@ call mpas_log_write('Done with soil consistency check')
 
       integer, dimension(:,:), pointer :: cellsOnEdge
       real (kind=RKIND), dimension(:), pointer :: rdzw
-      real (kind=RKIND), dimension(:,:), pointer :: zz, pp, ppb, rho, rho_zz, theta, theta_m
+      real (kind=RKIND), dimension(:,:), pointer :: zz, pp, ppb, rho, rho_zz, theta, theta_m, rTildeCell
       real (kind=RKIND), dimension(:), pointer :: surface_pressure
       real (kind=RKIND), dimension(:,:,:), pointer :: scalars
 
@@ -7266,6 +7378,7 @@ call mpas_log_write('Done with soil consistency check')
       call mpas_pool_get_array(mesh, 'cellsOnEdge', cellsOnEdge)
       call mpas_pool_get_array(mesh, 'rdzw', rdzw)
       call mpas_pool_get_array(mesh, 'zz', zz)
+      call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
       call mpas_pool_get_array(diag, 'pressure_p', pp)
       call mpas_pool_get_array(diag, 'pressure_base', ppb)
       call mpas_pool_get_array(diag, 'surface_pressure', surface_pressure)
@@ -7289,7 +7402,7 @@ call mpas_log_write('Done with soil consistency check')
       ! Compute rho and theta from rho_zz and theta_m
       do iCell=1,nCells
          do k=1,nVertLevels
-            rho(k,iCell) = rho_zz(k,iCell) * zz(k,iCell)
+            rho(k,iCell) = rho_zz(k,iCell) * zz(k,iCell) / (rTildeCell(k,iCell)**2)
             theta(k,iCell) = theta_m(k,iCell) / (1.0 + 1.61 * scalars(index_qv,k,iCell))
          end do
       end do

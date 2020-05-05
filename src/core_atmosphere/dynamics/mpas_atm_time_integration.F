@@ -5293,18 +5293,17 @@ module atm_time_integration
       end do
 
       if (config_deep_atmosphere) then
+         ! call mpas_log_write('deep_atmosphere NCT terms for w')
          do iCell = cellSolveStart, cellSolveEnd
 !DIR$ IVDEP
             do k=2,nVertLevels
                ! deep Eq. (20)
-               tend_w(k,iCell) = tend_w(k,iCell) + (fzm(k)*rTildeCell(k,iCell)+fzp(k)*rTildeCell(k-1,iCell))   &
-                                         * ( inv_r_earth*(rho_zz(k,iCell)*fzm(k)+rho_zz(k-1,iCell)*fzp(k))     &
-                                             * ( (fzm(k)*ur_cell(k,iCell)+fzp(k)*ur_cell(k-1,iCell))**2.       &
-                                                +(fzm(k)*vr_cell(k,iCell)+fzp(k)*vr_cell(k-1,iCell))**2. )     &
-                                            + 2.*omega*cos(latCell(iCell))                                     &
-                                              *(fzm(k)*ur_cell(k,iCell)+fzp(k)*ur_cell(k-1,iCell))             &
-                                              *(rho_zz(k,iCell)*fzm(k)+rho_zz(k-1,iCell)*fzp(k))           )
-
+               tend_w(k,iCell) = tend_w(k,iCell) + inv_r_earth*(                                                                     &
+                                    fzm(k)*(ur_cell(k  ,iCell)**2 + vr_cell(k  ,iCell)**2)*rho_zz(k  ,iCell)/rTildeCell(k  ,iCell)   &
+                                  + fzp(k)*(ur_cell(k-1,iCell)**2 + vr_cell(k-1,iCell)**2)*rho_zz(k-1,iCell)/rTildeCell(k-1,iCell) ) &
+                                     + 2.*omega*cos(latCell(iCell))*(fzm(k)*rTildeCell(k,iCell)+fzp(k)*rTildeCell(k-1,iCell))        &
+                                              *(fzm(k)*ur_cell(k  ,iCell)*rho_zz(k  ,iCell)/rTildeCell(k  ,iCell)                    &
+                                               +fzp(k)*ur_cell(k-1,iCell)*rho_zz(k-1,iCell)/rTildeCell(k-1,iCell))
             end do
          end do
       endif

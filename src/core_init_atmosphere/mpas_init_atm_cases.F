@@ -3563,7 +3563,7 @@ module init_atm_cases
          end do
 
 
-         if(i >= nCells-1) then
+         if(i == nCells) then
            call mpas_log_write(' discrete hydrostatic reference state, column $i ',intArgs=(/i/))
            do k=1,nz1
              call mpas_log_write(' k, ppb, pb, rb, tb (k,1), $i, $r, $r, $r, $r ',intArgs=(/k/),realArgs=(/ppb(k,1),pb(k,1),rb(k,1)*zz(k,1),tb(k,1)/))
@@ -3577,25 +3577,10 @@ module init_atm_cases
 
         lat_dcmip = latCell(i)
         lon_dcmip = lonCell(i)
-         
+
         if (config_deep_atmosphere.and.on_a_sphere) then
 
           if(i == 1) call mpas_log_write(' deep_atmosphere: setting NCT terms in hydrostatic balance ')
-
-          ! do k=1,nz  ! we are computing the hydrostatic nct terms at W levels here
-          !  z_dcmip = zgrid(k,i)
-          !  call baroclinic_wave_test (deep_dcmip, config_moist_dcmip, pertt_umj, X_dcmip,  &
-          !                             lon_dcmip, lat_dcmip, p_dcmip, z_dcmip,       &
-          !                             zcoords_dcmip, u_dcmip, v_dcmip, t_dcmip,     &
-          !                             thetav_dcmip, phis_dcmip, ps_dcmip, rho_dcmip,& 
-          !                             q_dcmip)
-          !
-          !  km1 = max(k-1,1)
-          !  kw = min(k,nz1)
-          !  r_c = 0.5*(rTildeCell(km1,i)+rTildeCell(kw,i))
-          !  hydrostatic_nct(k) = (((u_dcmip**2 + v_dcmip**2)/(r_earth*r_c)) + 2.*omega_e*u_dcmip*cos(lat_dcmip))/r_c
-          !                       
-          ! end do
 
           do k=1,nz1  ! we are computing the hydrostatic nct terms at U levels here
             z_dcmip = 0.5*(zgrid(k,i)+zgrid(k+1,i))
@@ -3605,7 +3590,7 @@ module init_atm_cases
                                        thetav_dcmip, phis_dcmip, ps_dcmip, rho_dcmip,& 
                                        q_dcmip)
 
-            hydrostatic_nct(k) = (((u_dcmip**2 + v_dcmip**2)/(r_earth*r_c)) + 2.*omega_e*u_dcmip*cos(lat_dcmip))/rTildeCell(k,i)
+            hydrostatic_nct(k) = (((u_dcmip**2 + v_dcmip**2)/(r_earth*rTildeCell(k,i))) + 2.*omega_e*u_dcmip*cos(lat_dcmip))/rTildeCell(k,i)
 
           end do
 
@@ -3613,7 +3598,7 @@ module init_atm_cases
 
           if(i == 1) call mpas_log_write(' shallow_atmosphere: setting NCT terms to zero ')
 
-          do k=1,nz
+          do k=1,nz1
             hydrostatic_nct(k) = 0.
           end do
 
@@ -3676,9 +3661,7 @@ module init_atm_cases
                         *( weight1*((rr(1,i)+rb(1,i)))*(1.+scalars(index_qv,1,i))/(rTildeCell(1,i)**2)           &
                           +weight2*((rr(2,i)+rb(2,i)))*(1.+scalars(index_qv,2,i))/(rTildeCell(2,i)**2))/(r_c**2) &
                            +0.5*dzw(1)*( weight1*(rr(1,i)+rb(1,i))*hydrostatic_nct(1)                            &
-                                        +weight2*(rr(2,i)+rb(2,i))*hydrostatic_nct(2) )
-!                           +0.5*dzw(1)*(weight1*(rr(1,i)+rb(1,i))+weight2*(rr(2,i)+rb(2,i)))
-!                             *(3.*hydrostatic_nct(1)+hydrostatic_nct(2))/4.
+                                        +weight2*(rr(2,i)+rb(2,i))*hydrostatic_nct(2) )/r_c
 
           ppi(1) = ppi(1)-ppb(1,i)
           do k=1,nz1-1
@@ -3686,10 +3669,7 @@ module init_atm_cases
              ppi(k+1) = ppi(k)-dzu(k+1)*(gravity)                                                                                   &
                            *( (rr(k  ,i) + (rr(k  ,i)+rb(k  ,i))*scalars(index_qv,k  ,i))*fzp(k+1)/(rTildeCell(k,i  )**2)           &
                              +(rr(k+1,i) + (rr(k+1,i)+rb(k+1,i))*scalars(index_qv,k+1,i))*fzm(k+1)/(rTildeCell(k+1,i)**2))/(r_c**2) &
-                              +dzu(k+1)*( fzp(k+1)*(rr(k,i)+rb(k,i))*hydrostatic_nct(k)                                             &
-                                         +fzm(k+1)*(rr(k+1,i)+rb(k+1,i))*hydrostatic_nct(k+1) )
-!                              +dzu(k+1)*(fzp(k+1)*(rr(k,i)+rb(k,i))+fzm(k+1)*(rr(k+1,i)+rb(k+1,i)))
-!                             *(hydrostatic_nct(k+1))
+                              +dzu(k+1)*(fzp(k+1)*(rr(k,i)+rb(k,i))+fzm(k+1)*(rr(k+1,i)+rb(k+1,i)))*(hydrostatic_nct(k+1))     
 
           end do
 
@@ -3714,13 +3694,15 @@ module init_atm_cases
                         +  weight2*(rr(2,i) + rb(2,i)) * (1. + scalars(index_qv,2,i)/(rTildeCell(2,i)**2)))/(r_c**2) &
                            -0.5*dzw(1)*( weight1*(rr(1,i)+rb(1,i))*hydrostatic_nct(1)                                &
                                         +weight2*(rr(2,i)+rb(2,i))*hydrostatic_nct(2) )
-!                           -0.5*dzw(1)*(weight1*(rr(1,i)+rb(1,i))+weight2*(rr(2,i)+rb(2,i)))
-!                             *(3.*hydrostatic_nct(1)+hydrostatic_nct(2))/4.
+
         surface_pressure(i) = surface_pressure(i) + pp(1,i) + ppb(1,i)
+
+        if(i == 1 ) call mpas_log_write(' first column surface pressure, $r ',realArgs=(/surface_pressure(i)/))
 
       end do  ! end loop over cells
 
-        call mpas_log_write(' cell loop complete, last column bottom rb, $r ',realArgs=(/rb(1,nCells)/))
+        call mpas_log_write(' cell loop complete, first column bottom rb, $r ',realArgs=(/rb(1,1)/))
+        call mpas_log_write(' cell loop complete, surface pressure, pp and ppb, $r, $r, $r ',realArgs=(/surface_pressure(1), pp(1,1), ppb(1,1)/))
 
       do iEdge=1,nEdges
 
@@ -3844,7 +3826,7 @@ module init_atm_cases
       end do
 
           do k=1,nz1
-            call mpas_log_write(' k, rb = $i, $r, $r', intArgs=(/k/), realArgs=(/rb(k,nCells),rho(k,nCells)/))
+            call mpas_log_write(' k, rb = $i, $r, $r', intArgs=(/k/), realArgs=(/rb(k,1),rho(k,1)/))
           end do
 
       ! Reconstruct zonal and meridional winds for diagnostic puposes:

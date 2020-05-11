@@ -2094,8 +2094,10 @@ module atm_time_integration
 !DIR$ IVDEP
          do k=2,nVertLevels
             ! deep Eq. (31)
-            cofwr(k,iCell) =.5*dtseps*gravity*(fzm(k)*zz(k  ,iCell)/rTildeCell(k  ,iCell)**2 &
-                                              +fzp(k)*zz(k-1,iCell)/rTildeCell(k-1,iCell)**2)
+!            cofwr(k,iCell) =.5*dtseps*gravity*(fzm(k)*zz(k  ,iCell)/rTildeCell(k  ,iCell)**2 &
+!                                              +fzp(k)*zz(k-1,iCell)/rTildeCell(k-1,iCell)**2)
+            cofwr(k,iCell) =.5*dtseps*gravity*(fzm(k)*zz(k  ,iCell) &
+                                              +fzp(k)*zz(k-1,iCell))
          end do
          coftz(1,iCell) = 0.0
 !DIR$ IVDEP
@@ -2710,8 +2712,8 @@ module atm_time_integration
                                        -zz(k-1,iCell)*ts(k-1)/rTildeCell(k-1,iCell)**2) &
                                +resm*(zz(k  ,iCell)*rtheta_pp(k  ,iCell)/rTildeCell(k  ,iCell)**2   &
                                      -zz(k-1,iCell)*rtheta_pp(k-1,iCell)/rTildeCell(k-1,iCell)**2)) &
-                       - cofwr(k,iCell)*((rs(k)+rs(k-1))                                &
-                               +resm*(rho_pp(k,iCell)+rho_pp(k-1,iCell)))               &
+                       - cofwr(k,iCell)*((rs(k)/rTildeCell(k  ,iCell)**2+rs(k-1)/rTildeCell(k-1,iCell)**2)                                &
+                               +resm*(rho_pp(k,iCell)/rTildeCell(k  ,iCell)**2+rho_pp(k-1,iCell)/rTildeCell(k-1,iCell)**2))               &
                        + cofwt(k  ,iCell)*(ts(k  )+resm*rtheta_pp(k  ,iCell))           &
                        + cofwt(k-1,iCell)*(ts(k-1)+resm*rtheta_pp(k-1,iCell))
          end do
@@ -4735,7 +4737,7 @@ module atm_time_integration
       real (kind=RKIND), dimension( nVertLevels ) :: ru_edge_w, q, u_mix
       real (kind=RKIND) :: theta_turb_flux, w_turb_flux, r
       real (kind=RKIND) :: scalar_weight
-      real (kind=RKIND) :: inv_r_earth
+      real (kind=RKIND) :: inv_r_earth, r_c
 
       real (kind=RKIND) :: invDt, flux, workpv
       real (kind=RKIND) :: edge_sign, pr_scale, r_dc, r_dv, u_mix_scale
@@ -5298,12 +5300,13 @@ module atm_time_integration
 !DIR$ IVDEP
             do k=2,nVertLevels
                ! deep Eq. (20)
-               tend_w(k,iCell) = tend_w(k,iCell) + inv_r_earth*(                                                                     &
-                                    fzm(k)*(ur_cell(k  ,iCell)**2 + vr_cell(k  ,iCell)**2)*rho_zz(k  ,iCell)/rTildeCell(k  ,iCell)   &
-                                  + fzp(k)*(ur_cell(k-1,iCell)**2 + vr_cell(k-1,iCell)**2)*rho_zz(k-1,iCell)/rTildeCell(k-1,iCell) ) &
-                                     + 2.*omega*cos(latCell(iCell))*(fzm(k)*rTildeCell(k,iCell)+fzp(k)*rTildeCell(k-1,iCell))        &
-                                              *(fzm(k)*ur_cell(k  ,iCell)*rho_zz(k  ,iCell)/rTildeCell(k  ,iCell)                    &
-                                               +fzp(k)*ur_cell(k-1,iCell)*rho_zz(k-1,iCell)/rTildeCell(k-1,iCell))
+               r_c = fzm(k)*rTildeCell(k,iCell)+fzp(k)*rTildeCell(k-1,iCell)
+               tend_w(k,iCell) = tend_w(k,iCell) + r_c*(inv_r_earth*(                                                                   &
+                                    fzm(k)*(ur_cell(k  ,iCell)**2 + vr_cell(k  ,iCell)**2)*rho_zz(k  ,iCell)/rTildeCell(k  ,iCell)**2   &
+                                  + fzp(k)*(ur_cell(k-1,iCell)**2 + vr_cell(k-1,iCell)**2)*rho_zz(k-1,iCell)/rTildeCell(k-1,iCell)**2 ) &
+                                     + 2.*omega*cos(latCell(iCell))                                                                     &
+                                              *(fzm(k)*ur_cell(k  ,iCell)*rho_zz(k  ,iCell)/rTildeCell(k  ,iCell)                       &
+                                               +fzp(k)*ur_cell(k-1,iCell)*rho_zz(k-1,iCell)/rTildeCell(k-1,iCell)) )
             end do
          end do
       endif

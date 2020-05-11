@@ -3590,6 +3590,9 @@ module init_atm_cases
                                        thetav_dcmip, phis_dcmip, ps_dcmip, rho_dcmip,& 
                                        q_dcmip)
 
+            ! in what follows, the 1/rTildeCell term at the end gives the correct coupling for U and V
+            ! after multiplication by rho (see eqn 20).
+            ! another note: equation (20) (uU + vV)/r, r = r_earth*rTildeCell
             hydrostatic_nct(k) = (((u_dcmip**2 + v_dcmip**2)/(r_earth*rTildeCell(k,i))) + 2.*omega_e*u_dcmip*cos(lat_dcmip))/rTildeCell(k,i)
 
           end do
@@ -3665,11 +3668,15 @@ module init_atm_cases
 
           ppi(1) = ppi(1)-ppb(1,i)
           do k=1,nz1-1
+
+             ! equation (20), we are dividing through by r_c^2.  The nct terms were multiplied by r_c, hence the 1/r_c term there
+
              r_c = fzp(k+1)*rTildeCell(k,i)+fzm(k+1)*rTildeCell(k+1,i)
              ppi(k+1) = ppi(k)-dzu(k+1)*(gravity)                                                                                   &
                            *( (rr(k  ,i) + (rr(k  ,i)+rb(k  ,i))*scalars(index_qv,k  ,i))*fzp(k+1)/(rTildeCell(k,i  )**2)           &
                              +(rr(k+1,i) + (rr(k+1,i)+rb(k+1,i))*scalars(index_qv,k+1,i))*fzm(k+1)/(rTildeCell(k+1,i)**2))/(r_c**2) &
-                              +dzu(k+1)*(fzp(k+1)*(rr(k,i)+rb(k,i))+fzm(k+1)*(rr(k+1,i)+rb(k+1,i)))*(hydrostatic_nct(k+1))     
+                              +dzu(k+1)*( fzp(k+1)*(rr(k,i)+rb(k,i))*hydrostatic_nct(k)+                                            &
+                                          fzm(k+1)*(rr(k+1,i)+rb(k+1,i))*hydrostatic_nct(k+1))/r_c
 
           end do
 

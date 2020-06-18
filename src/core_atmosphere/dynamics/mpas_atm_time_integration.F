@@ -4945,7 +4945,7 @@ module atm_time_integration
                                 - 2.*omega*cos(angleEdge(iEdge))*cos(latEdge(iEdge))  &
                                   *rho_edge(k,iEdge)*.25*(w(k,cell1)+w(k+1,cell1)+w(k,cell2)+w(k+1,cell2))          & 
                                 - u(k,iEdge)*.25*(w(k+1,cell1)+w(k,cell1)+w(k,cell2)+w(k+1,cell2))                  &
-                                  *rho_edge(k,iEdge) * inv_r_earth) / rTildeEdge(k,iEdge)
+                                  *rho_edge(k,iEdge) * inv_r_earth / rTildeEdge(k,iEdge) ) / rTildeEdge(k,iEdge)
             end do
          endif
 

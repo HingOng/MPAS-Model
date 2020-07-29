@@ -1960,7 +1960,7 @@ module atm_time_integration
       real (kind=RKIND), dimension(:,:), pointer :: zz, cqw, p, t, rb, rtb, pb, rt
       real (kind=RKIND), dimension(:,:), pointer :: cofwr, cofwz, coftz, cofwt, a_tri, alpha_tri, gamma_tri
       ! deep
-      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell
+      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell, rTildeLayer
       real (kind=RKIND), dimension(:), pointer :: cofrz, rdzw, fzm, fzp, rdzu
       real (kind=RKIND), dimension(:,:,:), pointer :: scalars
 
@@ -1980,6 +1980,7 @@ module atm_time_integration
       call mpas_pool_get_array(mesh, 'zz', zz)
       ! deep
       call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
+      call mpas_pool_get_array(mesh, 'rTildeLayer', rTildeLayer)
 
       call mpas_pool_get_array(diag, 'cqw', cqw)
       call mpas_pool_get_array(diag, 'exner', p)
@@ -2007,7 +2008,7 @@ module atm_time_integration
 
       call atm_compute_vert_imp_coefs_work(nCells, moist_start, moist_end, dts, epssm, &
                                    zz, cqw, p, t, rb, rtb, pb, rt, cofwr, cofwz, coftz, cofwt, &
-                                   rTildeCell, & ! deep
+                                   rTildeCell, rTildeLayer, & ! deep
                                    config_weak_temperature_gradient, &
                                    a_tri, alpha_tri, gamma_tri, cofrz, rdzw, fzm, fzp, rdzu, scalars, &
                                    cellStart, cellEnd, edgeStart, edgeEnd, &
@@ -2019,7 +2020,7 @@ module atm_time_integration
 
    subroutine atm_compute_vert_imp_coefs_work(nCells, moist_start, moist_end, dts, epssm, &
                                    zz, cqw, p, t, rb, rtb, pb, rt, cofwr, cofwz, coftz, cofwt, &
-                                   rTildeCell, & ! deep
+                                   rTildeCell, rTildeLayer, & ! deep
                                    config_weak_temperature_gradient, &
                                    a_tri, alpha_tri, gamma_tri, cofrz, rdzw, fzm, fzp, rdzu, scalars, &
                                    cellStart, cellEnd, edgeStart, edgeEnd, &
@@ -2054,6 +2055,7 @@ module atm_time_integration
       real (kind=RKIND), dimension(nVertLevels,nCells+1) :: gamma_tri
       ! deep
       real (kind=RKIND), dimension(nVertLevels,nCells+1) :: rTildeCell
+      real (kind=RKIND), dimension(nVertLevels+1,nCells+1) :: rTildeLayer
       real (kind=RKIND), dimension(nVertLevels) :: cofrz
       real (kind=RKIND), dimension(nVertLevels) :: rdzw
       real (kind=RKIND), dimension(nVertLevels) :: fzm
@@ -2093,9 +2095,6 @@ module atm_time_integration
 
 !DIR$ IVDEP
          do k=2,nVertLevels
-            ! deep Eq. (31)
-!            cofwr(k,iCell) =.5*dtseps*gravity*(fzm(k)*zz(k  ,iCell)/rTildeCell(k  ,iCell)**2 &
-!                                              +fzp(k)*zz(k-1,iCell)/rTildeCell(k-1,iCell)**2)
             cofwr(k,iCell) =.5*dtseps*gravity*(fzm(k)*zz(k  ,iCell) &
                                               +fzp(k)*zz(k-1,iCell))
          end do
@@ -2103,7 +2102,8 @@ module atm_time_integration
 !DIR$ IVDEP
          do k=2,nVertLevels
             cofwz(k,iCell) = dtseps*c2*(fzm(k)*zz(k,iCell)+fzp(k)*zz(k-1,iCell))  &
-                 *rdzu(k)*cqw(k,iCell)*(fzm(k)*p (k,iCell)+fzp(k)*p (k-1,iCell))
+                 *rdzu(k)*cqw(k,iCell)*(fzm(k)*p (k,iCell)+fzp(k)*p (k-1,iCell))  &
+                 *(rTildeLayer(k,iCell)**2)
             coftz(k,iCell) = dtseps*   (fzm(k)*t (k,iCell)+fzp(k)*t (k-1,iCell))
          end do
          coftz(nVertLevels+1,iCell) = 0.0
@@ -2707,16 +2707,20 @@ module atm_time_integration
          do k=2, nVertLevels
             ! deep Eq. (21).
             rw_p(k,iCell) = rw_p(k,iCell) +  dts*tend_rw(k,iCell)                       &
-                       - cofwz(k,iCell)*(fzm(k)*rTildeCell(k,iCell)**2+fzp(k)*rTildeCell(k-1,iCell)**2) & ! or redefine cofwz.
-                                     *((zz(k  ,iCell)*ts(k  )/rTildeCell(k  ,iCell)**2  &
-                                       -zz(k-1,iCell)*ts(k-1)/rTildeCell(k-1,iCell)**2) &
-                               +resm*(zz(k  ,iCell)*rtheta_pp(k  ,iCell)/rTildeCell(k  ,iCell)**2   &
-                                     -zz(k-1,iCell)*rtheta_pp(k-1,iCell)/rTildeCell(k-1,iCell)**2)) &
+                       - cofwz(k,iCell)*( zz(k  ,iCell)*(ts(k  )+resm*rtheta_pp(k,  iCell))/rTildeCell(k  ,iCell)**2   &
+                                         -zz(k-1,iCell)*(ts(k-1)+resm*rtheta_pp(k-1,iCell))/rTildeCell(k-1,iCell)**2 ) &
                        - cofwr(k,iCell)*((rs(k)/rTildeCell(k  ,iCell)**2+rs(k-1)/rTildeCell(k-1,iCell)**2)                                &
                                +resm*(rho_pp(k,iCell)/rTildeCell(k  ,iCell)**2+rho_pp(k-1,iCell)/rTildeCell(k-1,iCell)**2))               &
                        + cofwt(k  ,iCell)*(ts(k  )+resm*rtheta_pp(k  ,iCell))           &
                        + cofwt(k-1,iCell)*(ts(k-1)+resm*rtheta_pp(k-1,iCell))
          end do
+
+!!                       - cofwz(k,iCell)*(fzm(k)*rTildeCell(k,iCell)**2+fzp(k)*rTildeCell(k-1,iCell)**2) & ! or redefine cofwz.
+!!                                     *((zz(k  ,iCell)*ts(k  )/rTildeCell(k  ,iCell)**2  &
+!!                                       -zz(k-1,iCell)*ts(k-1)/rTildeCell(k-1,iCell)**2) &
+!!                               +resm*(zz(k  ,iCell)*rtheta_pp(k  ,iCell)/rTildeCell(k  ,iCell)**2   &
+!!                                     -zz(k-1,iCell)*rtheta_pp(k-1,iCell)/rTildeCell(k-1,iCell)**2)) &
+!!
 
          ! tridiagonal solve sweeping up and then down the column
 
@@ -4376,7 +4380,7 @@ module atm_time_integration
       real(kind=RKIND), dimension(:,:), pointer :: tend_w_pgf, tend_w_buoy
 
       ! deep
-      real(kind=RKIND), dimension(:,:), pointer :: rTildeCell, rTildeEdge
+      real(kind=RKIND), dimension(:,:), pointer :: rTildeCell, rTildeLayer, rTildeEdge
 
       real (kind=RKIND), pointer :: coef_3rd_order, c_s
       logical, pointer :: config_mix_full
@@ -4527,6 +4531,7 @@ module atm_time_integration
       call mpas_pool_get_array(mesh, 'cf3', cf3)
       ! deep
       call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
+      call mpas_pool_get_array(mesh, 'rTildeLayer', rTildeLayer)
       call mpas_pool_get_array(mesh, 'rTildeEdge', rTildeEdge)
 
       !
@@ -4552,7 +4557,7 @@ module atm_time_integration
          cellsOnEdge, verticesOnEdge, edgesOnCell, edgesOnEdge, cellsOnCell, edgesOnVertex, nEdgesOnCell, nEdgesOnEdge, &
          latCell, latEdge, angleEdge, u_init, v_init, advCellsForEdge, nAdvCellsForEdge, adv_coefs, adv_coefs_3rd, &
          rdzu, rdzw, fzm, fzp, qv_init, t_init, cf1, cf2, cf3, r_earth, ur_cell, vr_cell, defc_a, defc_b, &
-         rTildeCell, rTildeEdge, & ! deep
+         rTildeCell, rTildeLayer, rTildeEdge, & ! deep
          tend_w_pgf, tend_w_buoy, coef_3rd_order, c_s, config_mix_full, config_horiz_mixing, config_del4u_div_factor, &
          config_h_mom_eddy_visc2, config_v_mom_eddy_visc2, config_h_theta_eddy_visc2, config_v_theta_eddy_visc2, &
          config_h_theta_eddy_visc4, config_h_mom_eddy_visc4, config_visc4_2dsmag, config_len_disp, rk_step, dt, &
@@ -4581,7 +4586,7 @@ module atm_time_integration
       cellsOnEdge, verticesOnEdge, edgesOnCell, edgesOnEdge, cellsOnCell, edgesOnVertex, nEdgesOnCell, nEdgesOnEdge, &
       latCell, latEdge, angleEdge, u_init, v_init, advCellsForEdge, nAdvCellsForEdge, adv_coefs, adv_coefs_3rd, &
       rdzu, rdzw, fzm, fzp, qv_init, t_init, cf1, cf2, cf3, r_earth, ur_cell, vr_cell, defc_a, defc_b, &
-      rTildeCell, rTildeEdge, & ! deep
+      rTildeCell, rTildeLayer, rTildeEdge, & ! deep
       tend_w_pgf, tend_w_buoy, coef_3rd_order, c_s, config_mix_full, config_horiz_mixing, config_del4u_div_factor, &
       config_h_mom_eddy_visc2, config_v_mom_eddy_visc2, config_h_theta_eddy_visc2, config_v_theta_eddy_visc2, &
       config_h_theta_eddy_visc4, config_h_mom_eddy_visc4, config_visc4_2dsmag, config_len_disp, rk_step, dt, &
@@ -4696,6 +4701,7 @@ module atm_time_integration
 
       ! deep
       real (kind=RKIND), dimension(nVertLevels,nCells+1) :: rTildeCell
+      real (kind=RKIND), dimension(nVertLevels+1,nCells+1) :: rTildeLayer
       real (kind=RKIND), dimension(nVertLevels,nEdges+1) :: rTildeEdge
 
       real (kind=RKIND) :: coef_3rd_order, c_s
@@ -4864,7 +4870,7 @@ module atm_time_integration
 !DIR$ IVDEP
           do k = 1,nVertLevels
             tend_rho(k,iCell) = -h_divergence(k,iCell)-rdzw(k)*(rw(k+1,iCell)-rw(k,iCell)) + tend_rho_physics(k,iCell)
-            dpdz(k,iCell) = -gravity/rTildeCell(k,iCell)**2*(rb(k,iCell)*(qtot(k,iCell)) + rr_save(k,iCell)*(1.+qtot(k,iCell)))
+            dpdz(k,iCell) = -(gravity/(rTildeCell(k,iCell)**2))*(rb(k,iCell)*(qtot(k,iCell)) + rr_save(k,iCell)*(1.+qtot(k,iCell)))
           end do
         end do
       end if
@@ -4887,8 +4893,10 @@ module atm_time_integration
             do k=1,nVertLevels
             ! deep Eq. (17)
                tend_u_euler(k,iEdge) =  - cqu(k,iEdge)*( (pp(k,cell2)-pp(k,cell1))*invDcEdge(iEdge)/(.5*(zz(k,cell2)+zz(k,cell1))) &
-                                              -0.5*zxu(k,iEdge)*(dpdz(k,cell1)/rTildeCell(k,cell1)**2 &
-                                                                +dpdz(k,cell2)/rTildeCell(k,cell2)**2) )
+                                              -0.5*zxu(k,iEdge)*(dpdz(k,cell1)+dpdz(k,cell2))/rTildeEdge(k,iEdge)**2 )
+
+                                           !!   -0.5*zxu(k,iEdge)*(dpdz(k,cell1)/rTildeCell(k,cell1)**2 &
+                                           !!                     +dpdz(k,cell2)/rTildeCell(k,cell2)**2) )
             end do
 
          end if
@@ -4941,11 +4949,12 @@ module atm_time_integration
             ! deep Eq. (17)
          if (config_deep_atmosphere) then
             do k=1,nVertLevels
-               tend_u(k,iEdge) = tend_u(k,iEdge) + ( &
-                                - 2.*omega*cos(angleEdge(iEdge))*cos(latEdge(iEdge))  &
-                                  *rho_edge(k,iEdge)*.25*(w(k,cell1)+w(k+1,cell1)+w(k,cell2)+w(k+1,cell2))          & 
-                                - u(k,iEdge)*.25*(w(k+1,cell1)+w(k,cell1)+w(k,cell2)+w(k+1,cell2))                  &
-                                  *rho_edge(k,iEdge) * inv_r_earth / rTildeEdge(k,iEdge) ) / rTildeEdge(k,iEdge)
+               tend_u(k,iEdge) = tend_u(k,iEdge) + (                                               &
+                                - 2.*omega*cos(angleEdge(iEdge))*cos(latEdge(iEdge))               &
+                                  *.25*(w(k,cell1)+w(k+1,cell1)+w(k,cell2)+w(k+1,cell2))           & 
+                                - u(k,iEdge)*.25*(w(k+1,cell1)+w(k,cell1)+w(k,cell2)+w(k+1,cell2)) &
+                                  * inv_r_earth / rTildeEdge(k,iEdge) )                            &
+                                   * rho_edge(k,iEdge) / rTildeEdge(k,iEdge)
             end do
          endif
 
@@ -5285,9 +5294,12 @@ module atm_time_integration
 !DIR$ IVDEP
             do k=2,nVertLevels
             ! deep Eq. (20)
+            !!  tend_w_euler(k,iCell) = tend_w_euler(k,iCell) - cqw(k,iCell)*(   &
+            !!                               rdzu(k)*(pp(k,iCell)-pp(k-1,iCell)) &
+            !!                             *(fzm(k)*rTildeCell(k,iCell)**2+fzp(k)*rTildeCell(k-1,iCell)**2) &
+            !!                            - (fzm(k)*dpdz(k,iCell) + fzp(k)*dpdz(k-1,iCell)) )  ! dpdz is the buoyancy term here.
               tend_w_euler(k,iCell) = tend_w_euler(k,iCell) - cqw(k,iCell)*(   &
-                                           rdzu(k)*(pp(k,iCell)-pp(k-1,iCell)) &
-                                         *(fzm(k)*rTildeCell(k,iCell)**2+fzp(k)*rTildeCell(k-1,iCell)**2) &
+                                           rdzu(k)*(pp(k,iCell)-pp(k-1,iCell))*(rTildeLayer(k,iCell)**2) &
                                         - (fzm(k)*dpdz(k,iCell) + fzp(k)*dpdz(k-1,iCell)) )  ! dpdz is the buoyancy term here.
             end do
           end if
@@ -5300,13 +5312,16 @@ module atm_time_integration
 !DIR$ IVDEP
             do k=2,nVertLevels
                ! deep Eq. (20)
-               r_c = fzm(k)*rTildeCell(k,iCell)+fzp(k)*rTildeCell(k-1,iCell)
-               tend_w(k,iCell) = tend_w(k,iCell) + r_c*(inv_r_earth*(                                                                   &
-                                    fzm(k)*(ur_cell(k  ,iCell)**2 + vr_cell(k  ,iCell)**2)*rho_zz(k  ,iCell)/rTildeCell(k  ,iCell)**2   &
-                                  + fzp(k)*(ur_cell(k-1,iCell)**2 + vr_cell(k-1,iCell)**2)*rho_zz(k-1,iCell)/rTildeCell(k-1,iCell)**2 ) &
-                                     + 2.*omega*cos(latCell(iCell))                                                                     &
-                                              *(fzm(k)*ur_cell(k  ,iCell)*rho_zz(k  ,iCell)/rTildeCell(k  ,iCell)                       &
-                                               +fzp(k)*ur_cell(k-1,iCell)*rho_zz(k-1,iCell)/rTildeCell(k-1,iCell)) )
+               !! r_c = fzm(k)*rTildeCell(k,iCell)+fzp(k)*rTildeCell(k-1,iCell)
+
+               r_c = rTildeLayer(k,iCell)
+               tend_w(k,iCell) = tend_w(k,iCell) + (r_c**2)*(                                                 &
+                                    fzm(k)*( (ur_cell(k  ,iCell)**2 + vr_cell(k  ,iCell)**2)*inv_r_earth/r_c  &
+                                              + 2.*omega*cos(latCell(iCell))*ur_cell(k  ,iCell))              &
+                                                       *rho_zz(k  ,iCell)/rTildeCell(k  ,iCell)**2            &
+                                   +fzp(k)*( (ur_cell(k-1,iCell)**2 + vr_cell(k-1,iCell)**2)*inv_r_earth/r_c  &
+                                              + 2.*omega*cos(latCell(iCell))*ur_cell(k-1,iCell))              &
+                                                       *rho_zz(k-1,iCell)/rTildeCell(k-1,iCell)**2 )
             end do
          end do
       endif

@@ -571,6 +571,7 @@
                         <var name="t2m" packages="met_stage_out"/>
 			<var name="rTildeCell"/>
 			<var name="rTildeEdge"/>
+			<var name="rTildeLayer"/>
 			<var name="rTildeVertex"/>
 		</stream>
 
@@ -896,6 +897,9 @@
 		<var name="rTildeEdge" type="real" dimensions="nVertLevels nEdges" units="-"
                      description="Nondimensional radius for edges"/>
                 
+		<var name="rTildeLayer" type="real" dimensions="nVertLevelsP1 nCells" units="-"
+                     description="Nondimensional radius for cell layer (w) points"/>
+
 		<var name="rTildeVertex" type="real" dimensions="nVertLevels nVertices" units="-"
                      description="Nondimensional radius for vertices"/>
 													       

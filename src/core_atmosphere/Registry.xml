@@ -532,6 +532,7 @@
 			<var name="ol4"/>
 			<var name="h_oml_initial"/>
 			<var name="rTildeCell"/>
+			<var name="rTildeLayer"/>
 			<var name="rTildeEdge"/>
 			<var name="rTildeVertex"/>
 		</stream>
@@ -862,6 +863,7 @@
 			<var name="hu_oml"/>
 			<var name="hv_oml"/>
 			<var name="rTildeCell"/>
+			<var name="rTildeLayer"/>
 			<var name="rTildeEdge"/>
 			<var name="rTildeVertex"/>
 		</stream>
@@ -1426,6 +1428,9 @@
 
                 <var name="rTildeCell" type="real" dimensions="nVertLevels nCells" units="-"
 		     description="Nondimensional radius for cells"/>
+
+		<var name="rTildeLayer" type="real" dimensions="nVertLevelsP1 nCells" units="-"
+                     description="Nondimensional radius for cell layer (w) points"/>
 
 		<var name="rTildeEdge" type="real" dimensions="nVertLevels nEdges" units="-"
 		     description="Nondimensional radius for edges"/>

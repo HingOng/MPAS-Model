@@ -251,7 +251,12 @@
                      units="-"
                      description="Coefficient for the divergent component of the Laplacian filter of momentum in the relaxation zone"
                      possible_values="Positive real values"/>
-        </nml_record>
+
+		<nml_option name="config_deep_atmosphere" type="logical" default_value="false" in_defaults="true"
+		     units="-"
+                     description="Deep atmosphere configuration"
+		     possible_values=".true. or .false."/>
+	</nml_record>
 
         <nml_record name="damping" in_defaults="true">
                 <nml_option name="config_zd" type="real" default_value="22000.0"
@@ -569,6 +574,10 @@
 			<var name="tslb"/>
 			<var name="h_oml_initial"/>
 #endif
+			<var name="rTildeCell"/>
+			<var name="rTildeLayer"/>
+			<var name="rTildeEdge"/>
+			<var name="rTildeVertex"/>
 		</stream>
 
 		<stream name="restart" 
@@ -846,6 +855,10 @@
 			<var name="hv_oml"/>
 			<var_struct name="diag_physics_noahmp"/>
 #endif
+			<var name="rTildeCell"/>
+			<var name="rTildeLayer"/>
+			<var name="rTildeEdge"/>
+			<var name="rTildeVertex"/>
 		</stream>
 
 		<stream name="output" 
@@ -1512,6 +1525,18 @@
 
                 <var name="nearestRelaxationCell" type="integer" dimensions="nCells" units="-"
                      description="For cells in the specified zone, gives the index of the nearest cell in the relaxation zone"/>
+
+                <var name="rTildeCell" type="real" dimensions="nVertLevels nCells" units="-"
+		     description="Nondimensional radius for cells"/>
+
+		<var name="rTildeLayer" type="real" dimensions="nVertLevelsP1 nCells" units="-"
+                     description="Nondimensional radius for cell layer (w) points"/>
+
+		<var name="rTildeEdge" type="real" dimensions="nVertLevels nEdges" units="-"
+		     description="Nondimensional radius for edges"/>
+
+                <var name="rTildeVertex" type="real" dimensions="nVertLevels nVertices" units="-"
+                     description="Nondimensional radius for vertices"/>
 
         </var_struct>
 

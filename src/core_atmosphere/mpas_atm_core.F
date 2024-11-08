@@ -906,6 +906,8 @@ module atm_core
       integer :: iCell, k
       integer, pointer :: nCells, nVertLevels, index_qv
       real (kind=RKIND), dimension(:,:), pointer :: theta, rho, theta_m, rho_zz, zz
+      ! deep
+      real (kind=RKIND), dimension(:,:), pointer :: rTildeCell
       real (kind=RKIND), dimension(:,:), pointer :: pressure_base, pressure_p, pressure
       real (kind=RKIND), dimension(:,:,:), pointer :: scalars
 
@@ -924,11 +926,14 @@ module atm_core
       call mpas_pool_get_array(diag, 'pressure', pressure)
 
       call mpas_pool_get_array(mesh, 'zz', zz)
+      ! deep
+      call mpas_pool_get_array(mesh, 'rTildeCell', rTildeCell)
 
       do iCell=1,nCells
          do k=1,nVertLevels
             theta(k,iCell) = theta_m(k,iCell) / (1._RKIND + rvord * scalars(index_qv,k,iCell))
-            rho(k,iCell) = rho_zz(k,iCell) * zz(k,iCell)
+            ! deep Eq. (16) in SOK21
+            rho(k,iCell) = rho_zz(k,iCell) * zz(k,iCell) / rTildeCell(k,iCell)**2
             pressure(k,iCell) = pressure_base(k,iCell) + pressure_p(k,iCell)
          end do
       end do
